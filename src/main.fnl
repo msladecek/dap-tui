@@ -219,13 +219,11 @@
   (fn redraw-window-border [component-id focused?]
     ;; TODO: maybe this is too much work for too little sugar
     (let [term-seq (window-border-term-seq component-id focused? false)]
-      (write term-seq)
-      (io.stdout:flush)))
+      (write term-seq)))
 
   (fn redraw-component [component-id]
     (let [window-seq (window-term-seq component-id)]
-      (write window-seq))
-    (io.stdout:flush))
+      (write window-seq)))
 
   (fn tui.redraw []
     (when (not tui.initialized)
@@ -237,9 +235,7 @@
     (t.clear.screen)
     (each [component-id _ (pairs tui.location-plan)]
       (let [window-seq (window-term-seq component-id)]
-        (write window-seq)))
-
-    (io.stdout:flush))
+        (write window-seq))))
 
   (fn tui.handle-command [command params]
     (match command
