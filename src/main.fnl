@@ -8,6 +8,28 @@
 (local tablex (require "pl.tablex"))
 (local copas (require "copas"))
 
+(fn write [data]
+  (local delay 0.05)
+  (local batch-size 100)
+  (local data-size (length data))
+  (var ptr 1)
+  (var tries nil)
+  (while (<= ptr data-size)
+    (let [batch (string.sub data ptr (- (+ ptr batch-size) 1))
+          (ok? error-message error-code) (io.stdout:write batch)]
+      (if
+        ok?
+        (do
+          (io.stdout:flush)
+          (set ptr (+ ptr batch-size))
+          (set tries nil))
+        (or (= 11 error-code) (= 35 error-code))
+        (do
+          (set tries (+ 1 (or tries 0)))
+          (io.stdout:flush)
+          (t._bsleep (* tries delay)))
+        (values ok? error-message error-code)))))
+
 (local my-box-fmt
   (tablex.union t.draw.box_fmt.single
                 {:post " " :pre " "}))
@@ -197,13 +219,13 @@
   (fn redraw-window-border [component-id focused?]
     ;; TODO: maybe this is too much work for too little sugar
     (let [term-seq (window-border-term-seq component-id focused? false)]
-      (t.output.write term-seq)
-      (t.output.flush)))
+      (write term-seq)
+      (io.stdout:flush)))
 
   (fn redraw-component [component-id]
     (let [window-seq (window-term-seq component-id)]
-      (t.output.write window-seq))
-    (t.output.flush))
+      (write window-seq))
+    (io.stdout:flush))
 
   (fn tui.redraw []
     (when (not tui.initialized)
@@ -215,9 +237,9 @@
     (t.clear.screen)
     (each [component-id _ (pairs tui.location-plan)]
       (let [window-seq (window-term-seq component-id)]
-        (t.output.write window-seq)))
+        (write window-seq)))
 
-    (t.output.flush))
+    (io.stdout:flush))
 
   (fn tui.handle-command [command params]
     (match command
@@ -432,3 +454,9 @@
 
 ;; TODO
 ; do something clever to make the redrawing less glitchy
+
+;; MAYBE
+; line-based react-like diffing
+; 1. draw content line by line into a table
+; 2. on every command compare the old table to the new table
+; 3. generate terminal sequences only for the differences
