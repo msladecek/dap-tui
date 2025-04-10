@@ -9,26 +9,27 @@
 (local copas (require "copas"))
 
 (fn write [data]
-  (local delay 0.05)
-  (local batch-size 100)
-  (local data-size (length data))
-  (var ptr 1)
-  (var tries nil)
-  (while (<= ptr data-size)
-    (let [batch (string.sub data ptr (- (+ ptr batch-size) 1))
-          (ok? error-message error-code) (io.stdout:write batch)]
-      (if
-        ok?
-        (do
-          (io.stdout:flush)
-          (set ptr (+ ptr batch-size))
-          (set tries nil))
-        (or (= 11 error-code) (= 35 error-code))
-        (do
-          (set tries (+ 1 (or tries 0)))
-          (io.stdout:flush)
-          (t._bsleep (* tries delay)))
-        (values ok? error-message error-code)))))
+  (when data
+    (local delay 0.05)
+    (local batch-size 100)
+    (local data-size (length data))
+    (var ptr 1)
+    (var tries nil)
+    (while (<= ptr data-size)
+      (let [batch (string.sub data ptr (- (+ ptr batch-size) 1))
+            (ok? error-message error-code) (io.stdout:write batch)]
+        (if
+          ok?
+          (do
+            (io.stdout:flush)
+            (set ptr (+ ptr batch-size))
+            (set tries nil))
+          (or (= 11 error-code) (= 35 error-code))
+          (do
+            (set tries (+ 1 (or tries 0)))
+            (io.stdout:flush)
+            (t._bsleep (* tries delay)))
+          (values ok? error-message error-code))))))
 
 (local my-box-fmt
   (tablex.union t.draw.box_fmt.single
@@ -104,7 +105,7 @@
     {:events []
      :initialized false
      :size (usable-termsize)
-     :active {:screen :events
+     :active {:screen :debug
               :window :event-list
               :event-list--event nil}
      :layouts {:events {:type :horizontal-split
@@ -115,17 +116,20 @@
                                                  :ratios {:event-list 4 :keybindings 1}
                                                  :content {:event-list {} :keybindings {}}}
                                   :event-details {}}}
-               :debug {}}
+               :debug {:type "container"
+                       :content {:variables {}}}}
      :location-plan {}
      :components {:event-list {:title "Events"
                                :key :1
                                :type :list
                                :scroll-offset {:row 0 :column 0}}
-                  :keybindings {:title "Keybindings"
-                                :scroll-offset {:row 0 :column 0}}
                   :event-details {:title "Event Details"
                                   :key :2
-                                  :scroll-offset {:row 0 :column 0}}}})
+                                  :scroll-offset {:row 0 :column 0}}
+                  :keybindings {:title "Keybindings"
+                                :scroll-offset {:row 0 :column 0}}
+                  :variables {:title "Variables"
+                              :scroll-offset {:row 0 :column 0}}}})
 
   (fn split-real-sizes [split real-size]
     (let [ratios-sum (accumulate [sum 0
@@ -147,6 +151,22 @@
                                                  lines (stringx.splitlines text)]
                                              lines)
                                            [])
+                          :keybindings ["q: quit"
+                                        "E: events view"
+                                        "D: debugging view"
+                                        "r: run"
+                                        "c: continue"
+                                        "R: redraw"]
+                          :variables (->> (accumulate [variables {}
+                                                       _ event (pairs tui.events)]
+                                            (do
+                                              (when (?. event :content :content :body :variables)
+                                                (each [_ variable (ipairs event.content.content.body.variables)]
+                                                  (tset variables variable.name variable.value)))
+                                              variables))
+                                          inspect
+                                          (stringx.splitlines))
+
                           _ "")
           content (->> (icollect [line-no line (ipairs content-lines)]
                          (let [cursor-seq (t.cursor.position.set_seq
@@ -159,28 +179,35 @@
           content)))
 
   (fn window-border-term-seq [component-id focused? clear-content?]
-    (let [component (. tui.components component-id)
-          title (.. (if component.key (.. component.key ": ") "") component.title)
-          plan (. tui.location-plan component-id)
-          location plan.location
-          size plan.size]
-      (.. (t.cursor.position.set_seq location.row location.column)
-          (if focused?
-            (.. (t.text.stack.push_seq {:fg "yellow"})
-                (t.draw.box_seq size.height size.width my-focused-box-fmt clear-content? title)
-                (t.text.stack.pop_seq))
-            (t.draw.box_seq size.height size.width my-box-fmt clear-content? title)))))
+    (let [plan (. tui.location-plan component-id)]
+      (when plan
+        (let [component (. tui.components component-id)
+              title (.. (if component.key (.. component.key ": ") "") component.title)
+              location plan.location
+              size plan.size]
+          (.. (t.cursor.position.set_seq location.row location.column)
+              (if focused?
+                (.. (t.text.stack.push_seq {:fg "yellow"})
+                    (t.draw.box_seq size.height size.width my-focused-box-fmt clear-content? title)
+                    (t.text.stack.pop_seq))
+                (t.draw.box_seq size.height size.width my-box-fmt clear-content? title)))))))
 
   (fn window-term-seq [component-id]
     (let [plan (. tui.location-plan component-id)]
-      (.. (window-border-term-seq component-id (= component-id tui.active.window) true)
-          (window-content-term-seq component-id plan.location plan.size))))
+      (when plan
+        (.. (window-border-term-seq component-id (= component-id tui.active.window) true)
+            (window-content-term-seq component-id plan.location plan.size)))))
 
   (fn make-location-plan [layout size]
     (local location-plan {})
 
     (fn traverse [component-id component-layout location size]
       (match component-layout.type
+        :container
+        (let [(next content) (pairs component-layout.content)
+              (subcomponent-id subcomponent-layout) (next content)]
+          (traverse subcomponent-id subcomponent-layout location size))
+
         :horizontal-split
         (let [sizes (split-real-sizes component-layout size.width)]
           (accumulate [location2 location
@@ -203,7 +230,7 @@
               (traverse subcomponent-id (. component-layout.content subcomponent-id) location2 size2)
               next-location)))
 
-       _ (tset location-plan component-id {:location location :size size})))
+        _ (set (. location-plan component-id) {:location location :size size})))
 
     (traverse nil layout {:row 1 :column 1} tui.size)
     location-plan)
@@ -246,6 +273,7 @@
                        (set tui.active.event-list--event 1)
                        (set params.selected true)
                        (redraw-component :event-details)))
+                   (redraw-component :variables)
                    (redraw-component :event-list))
       :move-cursor (match tui.active.window
                     :event-list
@@ -273,7 +301,10 @@
                        (when (and new-active (not= currently-active new-active))
                          (set tui.active.window new-active)
                          (redraw-window-border currently-active false)
-                         (redraw-window-border new-active true)))))
+                         (redraw-window-border new-active true)))
+     :select-screen (when (. tui.layouts params.screen-id)
+                      (set tui.active.screen params.screen-id)
+                      (tui.redraw))))
 
   (fn tui.should-resize? []
     (not (tablex.deepcompare (usable-termsize) tui.size)))
@@ -375,6 +406,10 @@
         (match char
           :1 (tui.handle-command :select-window {:window-key :1})
           :2 (tui.handle-command :select-window {:window-key :2})
+
+          :E (tui.handle-command :select-screen {:screen-id :events})
+          :D (tui.handle-command :select-screen {:screen-id :debug})
+
           :r (handler.handle-command :run)
           :c (handler.handle-command :continue)
 
