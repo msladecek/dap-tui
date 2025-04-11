@@ -1,0 +1,36 @@
+[done] UI version 1
+  left pane - list of events coming from dap server
+  right pane - view of each event
+  bottom - list of keybindings
+  controls
+  - up/down/j/k - switch to next event
+  - s/n/i/c - send event step into, next, initialize, continue?
+UI version 2
+  C-h, C-l to switch between panes
+  keybindings only effective in the active pane
+  keybindings in popup window when ? is pressed
+TODO a better (reactive?) way to manage the UI updates
+TODO helper context managers for terminal sequence building (fennel macros?)
+  (with-text-attrs {...}
+    ; push stack at the start
+    ...
+    ) ; pop stack at the end
+  (with-output-buffer
+    ; create a buffer, push sequences into the buffer
+    ...
+    ) ; flush the buffer at the end
+MAYBE distribute with homebrew?
+[done] basic events view
+  list of events + event details: display event as json formatted with jq
+TODO basic debug view
+  source code, stack trace, variables
+TODO report bug in debugpy (connect argument being required in attach call)
+TODO unify terminology `active`, `selected`, `focused`
+TODO content scrolling; horizontal and vertical
+MAYBE line-based react-like diffing
+  1. draw content line by line into a table
+  2. on every command compare the old table to the new table
+  3. generate terminal sequences only for the differences
+TODO fix rounding issue in splits
+TODO setup defaults for scroll offsets instead of copying them around in each component
+TODO get rid of the event.content.content crap
