@@ -401,13 +401,7 @@
 
       [:response :scopes]
       (each [_ scope (ipairs message.content.body.scopes)]
-        (request :variables {:variablesReference scope.variablesReference}))
-
-      [:response :variables]
-      nil ;; TODO: collect variables and send them all at the same time
-      ; (each [_ variable (ipairs message.content.body.variables)]
-      ;   (screen.add-variable variable))
-      ))
+        (request :variables {:variablesReference scope.variablesReference}))))
 
   (fn handler.handle-command [command]
     (match command
