@@ -31,6 +31,16 @@
             (t._bsleep (* tries delay)))
           (values ok? error-message error-code))))))
 
+(fn format-with-jq [data]
+  (let [jq (io.popen "jq '.' > /tmp/dap-tui-jq-output.json" "w")]
+    (jq:write data)
+    (jq:flush)
+    (jq:close))
+  (let [jq-output (io.open "/tmp/dap-tui-jq-output.json" "r")
+        formatted (jq-output:read "a")]
+    (jq-output:close)
+    formatted))
+
 (local my-box-fmt
   (tablex.union t.draw.box_fmt.single
                 {:post " " :pre " "}))
@@ -51,7 +61,8 @@
 
 (fn make-empty-message []
   {:headers {}
-   :content nil})
+   :content nil
+   :content-raw nil})
 
 (fn write-message [socket message]
   (each [header val (pairs message.headers)]
@@ -76,6 +87,7 @@
 
   (when (. message.headers "Content-Length")
     (let [content (socket:receive (. message.headers "Content-Length"))]
+      (set message.content-raw (format-with-jq content))
       (set message.content (cjson.decode content))
       message)))
 
@@ -147,7 +159,9 @@
                                         (let [prefix (if event.selected "> " "  ")]
                                           (.. prefix event.label)))
                           :event-details (if tui.active.event-list--event
-                                           (let [text (inspect (. tui.events tui.active.event-list--event))
+                                           (let [active-event (. tui.events tui.active.event-list--event)
+                                                 text (or active-event.content.content-raw
+                                                          (inspect active-event.content))
                                                  lines (stringx.splitlines text)]
                                              lines)
                                            [])
@@ -483,7 +497,7 @@
 ;; TODO
 ; content scrolling; horizontal and vertical
 
-;; TODO
+;; [done] TODO
 ; do something clever to make the redrawing less glitchy
 
 ;; MAYBE

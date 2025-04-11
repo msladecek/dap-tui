@@ -19,6 +19,7 @@
           buildInputs = with pkgs; [
             nix-init
             curl
+            jq
             (lua5_3_compat.withPackages (
               ps:
                 with ps; let
