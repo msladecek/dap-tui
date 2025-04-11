@@ -87,7 +87,7 @@
 
   (when (. message.headers "Content-Length")
     (let [content (socket:receive (. message.headers "Content-Length"))]
-      (set message.content-raw (format-with-jq content))
+      (set message.content-raw content)
       (set message.content (cjson.decode content))
       message)))
 
@@ -168,7 +168,7 @@
                                           (.. prefix event.label)))
                           :event-details (if tui.active.event-list--event
                                            (let [active-event (. tui.events tui.active.event-list--event)
-                                                 text (or active-event.content.content-raw
+                                                 text (or active-event.content.content-formatted
                                                           (inspect active-event.content))
                                                  lines (stringx.splitlines text)]
                                              lines)
@@ -319,6 +319,8 @@
   (fn tui.handle-command [command params]
     (match command
       :add-event (do
+                   (when params.content.content-raw
+                     (set params.content.content-formatted (format-with-jq params.content.content-raw)))
                    (table.insert tui.events params)
                    (let [first-event? (= 1 (length tui.events))]
                      (when first-event?
@@ -431,7 +433,8 @@
         :add-event
         {:label (.. "request" " " (or content.command ""))
          :content {:headers request.headers
-                   :content content}}))
+                   :content content
+                   :content-raw request.content}}))
     (write-message sock request))
 
   (local handler (make-handler tui send-request))
@@ -537,9 +540,6 @@
 ;; TODO
 ; content scrolling; horizontal and vertical
 
-;; [done] TODO
-; do something clever to make the redrawing less glitchy
-
 ;; MAYBE
 ; line-based react-like diffing
 ; 1. draw content line by line into a table
@@ -556,4 +556,4 @@
 ; setup defaults for scroll offsets
 
 ;; TODO
-; format request events with jq
+; get rid of this event.content.content crap
