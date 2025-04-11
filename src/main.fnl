@@ -174,7 +174,12 @@
                           :variables (->> (accumulate [variables {}
                                                        _ event (pairs tui.events)]
                                             (do
-                                              (when (?. event :content :content :body :variables)
+                                              (match [(?. event :content :content :type)
+                                                      (?. event :content :content :command)]
+                                                [:response :scopes]
+                                                nil
+
+                                                [:response :variables]
                                                 (each [_ variable (ipairs event.content.content.body.variables)]
                                                   (tset variables variable.name variable.value)))
                                               variables))
