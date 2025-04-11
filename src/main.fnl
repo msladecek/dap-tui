@@ -195,29 +195,27 @@
                                           (stringx.splitlines))
                           :breakpoint-details (->> (accumulate [breakpoint-details {}
                                                                 _ event (pairs tui.events)]
-                                                     (do
-                                                       (let [content (?. event :content :content)]
-                                                         (match [(?. content :type)
-                                                                 (?. content :event)]
-                                                           [:event :stopped]
-                                                           (do
-                                                             (tset breakpoint-details :reason content.body.reason)
-                                                             (tset breakpoint-details :description content.body.description)
-                                                             (tset breakpoint-details :text content.body.text))))
+                                                     (let [content (?. event :content :content)]
+                                                       (match [(?. content :type)
+                                                               (?. content :event)]
+                                                         [:event :stopped]
+                                                         (do
+                                                           (tset breakpoint-details :reason content.body.reason)
+                                                           (tset breakpoint-details :description content.body.description)
+                                                           (tset breakpoint-details :text content.body.text)))
                                                        breakpoint-details))
                                                    inspect
                                                    (stringx.splitlines))
                           :stack-trace (accumulate [stack-trace []
                                                     _ event (pairs tui.events)]
-                                         (do
-                                           (let [content (?. event :content :content)]
-                                             (match [(?. content :type)
-                                                     (?. content :command)]
-                                               [:response :stackTrace]
-                                               (each [_ frame (ipairs content.body.stackFrames)]
-                                                 (table.insert stack-trace
-                                                               (.. frame.source.path ":" frame.line
-                                                                   " - " frame.name)))))
+                                         (let [content (?. event :content :content)]
+                                           (match [(?. content :type)
+                                                   (?. content :command)]
+                                             [:response :stackTrace]
+                                             (each [_ frame (ipairs content.body.stackFrames)]
+                                               (table.insert stack-trace
+                                                             (.. frame.source.path ":" frame.line
+                                                                 " - " frame.name))))
                                            stack-trace))
                           _ "")
           content (->> (icollect [line-no line (ipairs content-lines)]
