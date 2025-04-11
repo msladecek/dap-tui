@@ -128,8 +128,12 @@
                                                  :ratios {:event-list 4 :keybindings 1}
                                                  :content {:event-list {} :keybindings {}}}
                                   :event-details {}}}
-               :debug {:type "container"
-                       :content {:variables {}}}}
+               :debug {:type :vertical-split
+                       :order [:variables :stack-trace :breakpoint-details]
+                       :ratios {:variables 1 :stack-trace 1 :breakpoint-details 1}
+                       :content {:variables {}
+                                 :stack-trace {}
+                                 :breakpoint-details {}}}}
      :location-plan {}
      :components {:event-list {:title "Events"
                                :key :1
@@ -140,8 +144,12 @@
                                   :scroll-offset {:row 0 :column 0}}
                   :keybindings {:title "Keybindings"
                                 :scroll-offset {:row 0 :column 0}}
+                  :stack-trace {:title "Stack Trace"
+                                :scroll-offset {:row 0 :column 0}}
                   :variables {:title "Variables"
-                              :scroll-offset {:row 0 :column 0}}}})
+                              :scroll-offset {:row 0 :column 0}}
+                  :breakpoint-details {:title "Breakpoint Details"
+                                       :scroll-offset {:row 0 :column 0}}}})
 
   (fn split-real-sizes [split real-size]
     (let [ratios-sum (accumulate [sum 0
@@ -185,7 +193,32 @@
                                               variables))
                                           inspect
                                           (stringx.splitlines))
-
+                          :breakpoint-details (->> (accumulate [breakpoint-details {}
+                                                                _ event (pairs tui.events)]
+                                                     (do
+                                                       (let [content (?. event :content :content)]
+                                                         (match [(?. content :type)
+                                                                 (?. content :event)]
+                                                           [:event :stopped]
+                                                           (do
+                                                             (tset breakpoint-details :reason content.body.reason)
+                                                             (tset breakpoint-details :description content.body.description)
+                                                             (tset breakpoint-details :text content.body.text))))
+                                                       breakpoint-details))
+                                                   inspect
+                                                   (stringx.splitlines))
+                          :stack-trace (accumulate [stack-trace []
+                                                    _ event (pairs tui.events)]
+                                         (do
+                                           (let [content (?. event :content :content)]
+                                             (match [(?. content :type)
+                                                     (?. content :command)]
+                                               [:response :stackTrace]
+                                               (each [_ frame (ipairs content.body.stackFrames)]
+                                                 (table.insert stack-trace
+                                                               (.. frame.source.path ":" frame.line
+                                                                   " - " frame.name)))))
+                                           stack-trace))
                           _ "")
           content (->> (icollect [line-no line (ipairs content-lines)]
                          (let [cursor-seq (t.cursor.position.set_seq
@@ -293,6 +326,8 @@
                        (set params.selected true)
                        (redraw-component :event-details)))
                    (redraw-component :variables)
+                   (redraw-component :stack-trace)
+                   (redraw-component :breakpoint-details)
                    (redraw-component :event-list))
       :move-cursor (match tui.active.window
                     :event-list
@@ -510,3 +545,15 @@
 ; 1. draw content line by line into a table
 ; 2. on every command compare the old table to the new table
 ; 3. generate terminal sequences only for the differences
+
+;; TODO
+; rounding issue in splits
+
+;; TODO
+; get rid of the redundancy in slip specification
+
+;; TODO
+; setup defaults for scroll offsets
+
+;; TODO
+; format request events with jq
