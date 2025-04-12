@@ -66,47 +66,40 @@
               :window :event-list
               :event-list--event nil}
      :layouts {:events {:type :horizontal-split
-                        :order [:left-sidebar :event-details]
-                        :ratios {:left-sidebar 1 :event-details 4}
-                        :content {:left-sidebar {:type :vertical-split
-                                                 :order [:event-list :keybindings]
-                                                 :ratios {:event-list 4 :keybindings 1}
-                                                 :content {:event-list {} :keybindings {}}}
-                                  :event-details {}}}
+                        :content [{:type :vertical-split
+                                   :id :left-sidebar
+                                   :content [{:id :event-list
+                                              :size 4}
+                                             {:id :keybindings}]}
+                                  {:id :event-details
+                                   :size 4}]}
                :debug {:type :vertical-split
-                       :order [:variables :stack-trace :breakpoint-details]
-                       :ratios {:variables 1 :stack-trace 1 :breakpoint-details 1}
-                       :content {:variables {}
-                                 :stack-trace {}
-                                 :breakpoint-details {}}}}
+                       :content [{:id :variables}
+                                 {:id :stack-trace}
+                                 {:id :breakpoint-details}]}}
      :location-plan {}
      :components {:event-list {:title "Events"
                                :key :1
-                               :type :list
-                               :scroll-offset {:row 0 :column 0}}
+                               :type :list}
                   :event-details {:title "Event Details"
-                                  :key :2
-                                  :scroll-offset {:row 0 :column 0}}
-                  :keybindings {:title "Keybindings"
-                                :scroll-offset {:row 0 :column 0}}
-                  :stack-trace {:title "Stack Trace"
-                                :scroll-offset {:row 0 :column 0}}
-                  :variables {:title "Variables"
-                              :scroll-offset {:row 0 :column 0}}
-                  :breakpoint-details {:title "Breakpoint Details"
-                                       :scroll-offset {:row 0 :column 0}}}})
+                                  :key :2}
+                  :keybindings {:title "Keybindings"}
+                  :stack-trace {:title "Stack Trace"}
+                  :variables {:title "Variables"}
+                  :breakpoint-details {:title "Breakpoint Details"}}})
 
   (fn split-real-sizes [split real-size]
-    (let [ratios-sum (accumulate [sum 0
-                                  _ ratio (pairs split.ratios)]
-                       (+ sum ratio))]
-      (collect [subcomponent-id subcomponent-ratio (pairs split.ratios)]
-        (values subcomponent-id (round (* real-size (/ subcomponent-ratio ratios-sum)))))))
+    (let [total-relative-sizes (accumulate [sum 0
+                                            _ component (ipairs split.content)]
+                                 (+ sum (or component.size 1)))]
+      (collect [_ component (ipairs split.content)]
+        (let [relative-size (or component.size 1)]
+          (values component.id (round (* real-size (/ relative-size total-relative-sizes))))))))
 
   (fn window-content-term-seq [component-id location size]
     (let [content-size (tablex.map (fn [s] (- s 2)) size)
           content-location (tablex.map (fn [l] (+ 1 l)) location)
-          scroll-offset (. tui.components component-id :scroll-offset)
+          scroll-offset (or (. tui.components component-id :scroll-offset) {:row 0 :column 0})
           content-lines (match component-id
                           :event-list (icollect [_ event (ipairs tui.events)]
                                         (let [prefix (if event.selected "> " "  ")]
@@ -196,38 +189,38 @@
   (fn make-location-plan [layout size]
     (local location-plan {})
 
-    (fn traverse [component-id component-layout location size]
+    (fn traverse [component-layout location size]
       (match component-layout.type
         :container
-        (let [(next content) (pairs component-layout.content)
-              (subcomponent-id subcomponent-layout) (next content)]
-          (traverse subcomponent-id subcomponent-layout location size))
+        (let [(next content) (ipairs component-layout.content)
+              (_ subcomponent-layout) (next content)]
+          (traverse subcomponent-layout location size))
 
         :horizontal-split
         (let [sizes (split-real-sizes component-layout size.width)]
           (accumulate [location2 location
-                       _ subcomponent-id (ipairs component-layout.order)]
-            (let [size2 {:width (. sizes subcomponent-id)
+                       _ subcomponent (ipairs component-layout.content)]
+            (let [size2 {:width (. sizes subcomponent.id)
                          :height size.height}
                   next-location {:row location2.row
                                  :column (+ location.column size2.width)}]
-              (traverse subcomponent-id (. component-layout.content subcomponent-id) location2 size2)
+              (traverse subcomponent location2 size2)
               next-location)))
 
         :vertical-split
         (let [sizes (split-real-sizes component-layout size.height)]
           (accumulate [location2 location
-                       _ subcomponent-id (ipairs component-layout.order)]
+                       _ subcomponent (ipairs component-layout.content)]
             (let [size2 {:width size.width
-                         :height (. sizes subcomponent-id)}
+                         :height (. sizes subcomponent.id)}
                   next-location {:row (+ location2.row size2.height)
                                  :column location.column}]
-              (traverse subcomponent-id (. component-layout.content subcomponent-id) location2 size2)
+              (traverse subcomponent location2 size2)
               next-location)))
 
-        _ (set (. location-plan component-id) {:location location :size size})))
+        _ (set (. location-plan component-layout.id) {:location location :size size})))
 
-    (traverse nil layout {:row 1 :column 1} tui.size)
+    (traverse layout {:row 1 :column 1} tui.size)
     location-plan)
 
   (fn tui.initialize []
