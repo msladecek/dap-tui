@@ -1,8 +1,8 @@
 (local inspect (require "inspect"))
 (local stringx (require "pl.stringx"))
 (local sys (require "system"))
-(local tablex (require "pl.tablex"))
 (local t (require "terminal"))
+(local tablex (require "pl.tablex"))
 
 (fn format-with-jq [data]
   (let [jq (io.popen "jq '.' > /tmp/dap-tui-jq-output.json" "w")]
@@ -310,4 +310,4 @@
 
   tui)
 
-{: make-tui}
+{:make-tui make-tui}

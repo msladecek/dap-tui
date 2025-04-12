@@ -1,61 +1,14 @@
-(local socket (require "socket"))
-(local cjson (require "cjson.safe"))
+(local copas (require "copas"))
 (local inspect (require "inspect"))
 (local seq (require "pl.seq"))
+(local socket (require "socket"))
+(local t (require "terminal"))
 (local tablex (require "pl.tablex"))
-(local copas (require "copas"))
-(local {: make-tui} (require :dap-tui.terminal))
-
-(fn parse-header [header-line]
-  (let [loc (string.find header-line ": ")]
-    (when loc
-      (let [header-name (string.sub header-line 0 (- loc 1))
-            header-value (string.sub header-line (+ loc 2))
-            header-value-parsed (if (= "Content-Length" header-name)
-                                  (tonumber header-value)
-                                  header-value)]
-        (values header-name header-value-parsed)))))
-
-(fn make-empty-message []
-  {:headers {}
-   :content nil
-   :content-raw nil})
-
-(fn write-message [socket message]
-  (each [header val (pairs message.headers)]
-    (socket:send header)
-    (socket:send ": ")
-    (socket:send (tostring val))
-    (socket:send "\r\n"))
-  (socket:send "\r\n")
-  (when message.content
-    (socket:send message.content)))
-
-(fn read-message [socket]
-  (var message (make-empty-message))
-  (var continue-reading? true)
-  (while continue-reading?
-    (local header-line (socket:receive))
-    (if (and header-line (not= "" header-line))
-      (let [(header val) (parse-header header-line)]
-        (when header
-          (tset message.headers header val)))
-      (set continue-reading? false)))
-
-  (when (. message.headers "Content-Length")
-    (let [content (socket:receive (. message.headers "Content-Length"))]
-      (set message.content-raw content)
-      (set message.content (cjson.decode content))
-      message)))
-
-(fn make-request [seq command arguments]
-  (let [content-data {:seq seq
-                      :type :request
-                      :command command
-                      :arguments arguments}
-        content-json (cjson.encode content-data)]
-    {:headers {"Content-Length" (length content-json)}
-     :content content-json}))
+(local {:make-tui make-tui} (require :dap-tui.terminal))
+(local {:write-message write-message
+        :make-request make-request
+        :read-message read-message}
+  (require :dap-tui.message))
 
 (fn make-handler [tui send-request]
   (var seq 1)
@@ -112,17 +65,15 @@
   (sock:settimeout 0)
 
   (fn send-request [request]
-    (let [content (cjson.decode request.content)]
-      (tui.handle-command
-        :add-event
-        {:label (.. "request" " " (or content.command ""))
-         :content {:headers request.headers
-                   :content content
-                   :content-raw request.content}}))
+    (tui.handle-command
+      :add-event
+      {:label (.. "request" " " (or request.content-data.command ""))
+       :content {:headers request.headers
+                 :content request.content-data
+                 :content-raw request.content-json}})
     (write-message sock request))
 
   (local handler (make-handler tui send-request))
-
   (var should-run? true)
 
   (copas.addthread
