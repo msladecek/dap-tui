@@ -28,7 +28,7 @@
       {:label (.. message.content.type " " (or message.content.event message.content.command ""))
        :content message})
 
-    (match [message.content.type (or message.content.command message.content.event)]
+    (case [message.content.type (or message.content.command message.content.event)]
       [:response :initialize]
       (do
         (request :attach {:connect {}})
@@ -47,7 +47,7 @@
         (request :variables {:variablesReference scope.variablesReference}))))
 
   (fn handler.handle-command [command]
-    (match command
+    (case command
       :run
       (request :initialize {:clientName "dap-tui" :adapterID "debugpy"})
 
@@ -95,7 +95,7 @@
     (fn []
       (while should-run?
         (local (char typ sequence) (t.input.readansi math.huge copas.pause))
-        (match char
+        (case char
           :1 (tui.handle-command :select-window {:window-key :1})
           :2 (tui.handle-command :select-window {:window-key :2})
 

@@ -100,7 +100,7 @@
     (let [content-size (tablex.map (fn [s] (- s 2)) size)
           content-location (tablex.map (fn [l] (+ 1 l)) location)
           scroll-offset (or (. tui.components component-id :scroll-offset) {:row 0 :column 0})
-          content-lines (match component-id
+          content-lines (case component-id
                           :event-list (icollect [_ event (ipairs tui.events)]
                                         (let [prefix (if event.selected "> " "  ")]
                                           (.. prefix event.label)))
@@ -120,7 +120,7 @@
                           :variables (->> (accumulate [variables {}
                                                        _ event (pairs tui.events)]
                                             (do
-                                              (match [(?. event :content :content :type)
+                                              (case [(?. event :content :content :type)
                                                       (?. event :content :content :command)]
                                                 [:response :scopes]
                                                 nil
@@ -134,7 +134,7 @@
                           :breakpoint-details (->> (accumulate [breakpoint-details {}
                                                                 _ event (pairs tui.events)]
                                                      (let [content (?. event :content :content)]
-                                                       (match [(?. content :type)
+                                                       (case [(?. content :type)
                                                                (?. content :event)]
                                                          [:event :stopped]
                                                          (do
@@ -147,7 +147,7 @@
                           :stack-trace (accumulate [stack-trace []
                                                     _ event (pairs tui.events)]
                                          (let [content (?. event :content :content)]
-                                           (match [(?. content :type)
+                                           (case [(?. content :type)
                                                    (?. content :command)]
                                              [:response :stackTrace]
                                              (each [_ frame (ipairs content.body.stackFrames)]
@@ -190,7 +190,7 @@
     (local location-plan {})
 
     (fn traverse [component-layout location size]
-      (match component-layout.type
+      (case component-layout.type
         :container
         (let [(next content) (ipairs component-layout.content)
               (_ subcomponent-layout) (next content)]
@@ -253,7 +253,7 @@
         (write window-seq))))
 
   (fn tui.handle-command [command params]
-    (match command
+    (case command
       :add-event (do
                    (when params.content.content-raw
                      (set params.content.content-formatted (format-with-jq params.content.content-raw)))
@@ -267,9 +267,9 @@
                    (redraw-component :stack-trace)
                    (redraw-component :breakpoint-details)
                    (redraw-component :event-list))
-      :move-cursor (match tui.active.window
+      :move-cursor (case tui.active.window
                     :event-list
-                    (match params.direction
+                    (case params.direction
                       :down (let [previously-selected tui.active.event-list--event]
                               (when (and previously-selected (< previously-selected (length tui.events)))
                                 (let [newly-selected (+ 1 previously-selected)]
