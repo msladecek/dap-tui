@@ -4,7 +4,9 @@
 (local socket (require "socket"))
 (local t (require "terminal"))
 (local tablex (require "pl.tablex"))
-(local {:make-tui make-tui} (require :dap-tui.terminal))
+(local {:make-tui make-tui
+        :usable-termsize usable-termsize}
+  (require :dap-tui.terminal))
 (local {:write-message write-message
         :make-request make-request
         :read-message read-message}
@@ -58,7 +60,7 @@
 
 (fn main []
   (local tui (make-tui))
-  (tui.redraw)
+  (tui.initialize)
 
   (local sock (copas.wrap (assert (socket.tcp))))
   (sock:connect "localhost" 5678)
@@ -70,7 +72,7 @@
       {:label (.. "request" " " (or request.content-data.command ""))
        :content {:headers request.headers
                  :content request.content-data
-                 :content-raw request.content-json}})
+                 :content-raw request.content}})
     (write-message sock request))
 
   (local handler (make-handler tui send-request))
@@ -87,9 +89,9 @@
     {:delay 0.2
      :recurring true
      :callback (fn [timer]
-                 (if
-                   (not should-run?) (timer:cancel)
-                   (tui.should-resize?) (tui.redraw)))})
+                 (if (not should-run?)
+                   (timer:cancel)
+                   (tui.handle-command :set-screensize (usable-termsize))))})
 
   (copas.addthread
     (fn []
@@ -105,8 +107,6 @@
           :r (handler.handle-command :run)
           :c (handler.handle-command :continue)
 
-          :R (tui.draw)
-
           :h (tui.handle-command :move-cursor {:direction :left})
           :j (tui.handle-command :move-cursor {:direction :down})
           :k (tui.handle-command :move-cursor {:direction :up})
@@ -116,7 +116,7 @@
 
           _ (tui.handle-command
               :add-event
-              {:label "unhandled key"
+              {:label (.. "unhandled key: " char)
                :content {:char char
                          :type typ
                          :sequence sequence}})))))
