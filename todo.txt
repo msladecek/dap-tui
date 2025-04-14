@@ -28,3 +28,4 @@ TODO windows as lists of cells
   when drawing, instead of writing text to stdout, set text in a specific line cell
   implement scrolling and overflow on the level of lines
 TODO generic tui function - takes layout and component specifications
+TODO put the keybindings documentation and their implementation nearer together

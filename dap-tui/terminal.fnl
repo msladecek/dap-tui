@@ -351,7 +351,9 @@
                   {:content-fn (line-content-fn
                                  (->cell ["q: quit"
                                           "r: run"
-                                          "c: continue"]))})
+                                          "c: continue"
+                                          "E/D: events view / debugger view"
+                                          "1/2/...: Change focused window"]))})
      (make-window :variables "Variables"
                   {:content-fn (line-content-fn (->cell (events->variables (events.get))))})
      (make-window :stack-trace "Stack Trace"
