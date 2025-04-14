@@ -26,7 +26,7 @@
     (socket:send message.content)))
 
 (fn read-message [socket]
-  (var message (make-empty-message))
+  (local message (make-empty-message))
   (var continue-reading? true)
   (while continue-reading?
     (local header-line (socket:receive))
@@ -39,8 +39,8 @@
   (when (. message.headers "Content-Length")
     (let [content (socket:receive (. message.headers "Content-Length"))]
       (set message.content-raw content)
-      (set message.content (cjson.decode content))
-      message)))
+      (set message.content (cjson.decode content))))
+  message)
 
 (fn make-request [seq command arguments]
   (let [content-data {:seq seq
