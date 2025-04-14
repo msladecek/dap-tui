@@ -1,5 +1,4 @@
 (local cjson (require "cjson.safe"))
-(local socket (require "socket"))
 
 (fn parse-header [header-line]
   (let [loc (string.find header-line ": ")]
