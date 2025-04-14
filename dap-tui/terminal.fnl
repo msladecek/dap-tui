@@ -4,15 +4,7 @@
 (local t (require "terminal"))
 (local tablex (require "pl.tablex"))
 
-;; TODO: bottom toolbar with basic debug info (eg. cell count)
-
-;; TODO: sanitize this using macros gensyms
 (var -callback-binding nil)
-
-;; TODO:
-; 1. register all the dependencies of a cell
-; 2. register all child cells (cells defined within the expr of the parent cell)
-; 3. when the value changes unhook all child cells from their dependencies
 
 (fn make-cell [initial-value]
   (local cell {:value initial-value :callbacks {}})
@@ -279,8 +271,6 @@
                   (draw-lines content.plan content.lines))))))
 
   (fn make-window [id title params]
-    ;; TODO: keep a list of cells, one per line
-    ;;       when drawing, instead of outputing ascii, set text in a specific line
     (let [plan (->cell (. (drawing-plan.get) id))
           params (or params {})
           window-key (. params :key)
