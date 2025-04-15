@@ -29,3 +29,6 @@ TODO windows as lists of cells
   implement scrolling and overflow on the level of lines
 TODO generic tui function - takes layout and component specifications
 TODO put the keybindings documentation and their implementation nearer together
+TODO floating windows
+TODO popup: confirm before quit
+TODO popup: help window - press `?` to show
