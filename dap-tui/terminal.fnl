@@ -46,13 +46,25 @@
 
   cell)
 
-(macro ->cell [...]
-  (let [expr `(fn [] ,(do ...))]
-    `(make-computed-cell ,expr)))
+(macro ->cell [& args]
+  (case args
+    (where [deps & exprs] (and (< 0 (length exprs))
+                               (sequence? deps)))
+    `(make-computed-cell
+       (fn []
+          (let ,(accumulate [binds []
+                             _ dep (ipairs deps)]
+                  (do
+                    (table.insert binds dep)
+                    (table.insert binds `((. ,dep :get)))
+                    binds))
+            ,(unpack exprs))))
 
-(macro on-change-of [cell callback-args callback-body]
-  (let [callback `(fn ,callback-args ,callback-body)]
-    `((. ,cell :add-callback) ,callback)))
+    (where [& exprs] (< 0 (length exprs)))
+    `(make-computed-cell (fn [] ,(unpack exprs)))
+
+    _
+    (assert-compile false "At least one argument is needed")))
 
 (fn format-with-jq [data]
   (let [jq (io.popen "jq '.' > /tmp/dap-tui-jq-output.json" "w")]
@@ -213,10 +225,9 @@
   (local active-screen (->cell nil))
   (local active-window-key (->cell nil))
   (local active-event-no (->cell nil))
-  (local active-event (->cell (let [events (events.get)
-                                    event-no (active-event-no.get)]
-                                (when (and events event-no)
-                                  (. events event-no)))))
+  (local active-event (->cell [events active-event-no]
+                              (when (and events active-event-no)
+                                (. events active-event-no))))
 
   (local layouts
     {:events {:type :horizontal-split
@@ -233,9 +244,9 @@
                        {:id :breakpoint-details}]}})
 
   (local drawing-plan
-    (->cell
-      (let [layout (. layouts (active-screen.get))]
-        (make-drawing-plan layout (screen-size.get)))))
+    (->cell [active-screen screen-size]
+      (let [layout (. layouts active-screen)]
+        (make-drawing-plan layout screen-size))))
 
   (fn window-plan->content-plan [window-plan]
     (when window-plan
@@ -264,25 +275,29 @@
 
   (fn line-content-fn [lines]
     (fn [window]
-      (let [content-plan (->cell (window-plan->content-plan (window.plan.get)))
-            content-data (->cell {:plan (content-plan.get)
-                                  :lines (lines.get)})]
-        (->cell (let [content (content-data.get)]
-                  (draw-lines content.plan content.lines))))))
+      (let [window-plan window.plan
+            content-plan (->cell [window-plan]
+                                 (window-plan->content-plan window-plan))
+            content (->cell [content-plan lines]
+                            {:plan content-plan
+                             :lines lines})]
+        (->cell [content]
+                (draw-lines content.plan content.lines)))))
 
   (fn make-window [id title params]
-    (let [plan (->cell (. (drawing-plan.get) id))
+    (let [plan (->cell [drawing-plan] (. drawing-plan id))
           params (or params {})
           window-key (. params :key)
           title (if window-key
                   (.. (tostring window-key) ": " title)
                   title)
-          focused? (->cell (and window-key (= window-key (active-window-key.get))))
-          border-data (->cell {:focused? (focused?.get)
-                               :plan (plan.get)})
-          border (->cell
-                   (let [border (border-data.get)]
-                     (draw-border border.plan title border.focused?)))
+          focused? (->cell [active-window-key]
+                           (and window-key (= window-key active-window-key)))
+          border-data (->cell [focused? plan]
+                              {:focused? focused?
+                               :plan plan})
+          border (->cell [border-data]
+                         (draw-border border-data.plan title border-data.focused?))
           window {:id id
                   :title title
                   :params params
@@ -314,25 +329,26 @@
               (t.clear.box_seq (- plan.size.height event-count) plan.size.width)))))
 
     (let [window (make-window id title params)
-          content-plan (->cell (window-plan->content-plan (window.plan.get)))
+          window-plan window.plan
+          content-plan (->cell [window-plan]
+                               (window-plan->content-plan window-plan))
           event-items []]
 
-      (->cell (each [event-no event (ipairs (events.get))]
+      (->cell [events]
+              (each [event-no event (ipairs events)]
                 (when (not (. event-items event-no))
                   (table.insert
                     event-items
-                    (let [item-data (->cell {:active? (= event-no (active-event-no.get))
-                                             :event-no event-no
-                                             :event event
-                                             :content-plan (content-plan.get)})]
-                      (->cell (let [item (item-data.get)]
-                                (draw-event-item item)))
-                      item-data)))))
-
-      (->cell (let [events (events.get)
-                    plan (content-plan.get)]
-                (clear-below-events plan (length events))))
-
+                    (let [item (->cell [active-event-no content-plan]
+                                       {:active? (= event-no active-event-no)
+                                        :event-no event-no
+                                        :event event
+                                        :content-plan content-plan})]
+                      (->cell [item]
+                              (draw-event-item item))
+                      item)))))
+      (->cell [events content-plan]
+              (clear-below-events content-plan (length events)))
       window))
 
   (local windows
@@ -341,12 +357,12 @@
      (make-window :event-details "Event Details"
                   {:key :2
                    :content-fn (line-content-fn
-                                 (->cell (let [event (active-event.get)]
-                                           (when event
-                                             (let [content-raw (?. event :content :content-raw) ]
-                                               (stringx.splitlines (if content-raw
-                                                                     (format-with-jq content-raw)
-                                                                     (inspect event))))))))})
+                                 (->cell [active-event] 
+                                         (when active-event
+                                           (let [content-raw (?. active-event :content :content-raw) ]
+                                             (stringx.splitlines (if content-raw
+                                                                   (format-with-jq content-raw)
+                                                                   (inspect active-event)))))))})
      (make-window :keybindings "Keybindings"
                   {:content-fn (line-content-fn
                                  (->cell ["q: quit"
@@ -355,54 +371,53 @@
                                           "E/D: events view / debugger view"
                                           "1/2/...: Change focused window"]))})
      (make-window :variables "Variables"
-                  {:content-fn (line-content-fn (->cell (events->variables (events.get))))})
+                  {:content-fn (line-content-fn (->cell [events] (events->variables events)))})
      (make-window :stack-trace "Stack Trace"
-                  {:content-fn (line-content-fn (->cell (events->stack-trace (events.get))))})
+                  {:content-fn (line-content-fn (->cell [events] (events->stack-trace events)))})
      (make-window :breakpoint-details "Breakpoint Details"
-                  {:content-fn (line-content-fn (->cell (events->breakpoint-details (events.get))))})])
+                  {:content-fn (line-content-fn (->cell [events] (events->breakpoint-details events)))})])
 
   (local tui {})
 
-(fn tui.initialize []
-  (t.initialize {:displaybackup true :filehandle io.stdout})
-  (t.cursor.visible.set false)
-  (set tui.initialized true)
-  (t.clear.screen)
+  (fn tui.initialize []
+    (t.initialize {:displaybackup true :filehandle io.stdout})
+    (t.cursor.visible.set false)
+    (set tui.initialized true)
+    (t.clear.screen)
 
-  (active-screen.set :events))
+    (active-screen.set :events))
 
-(fn tui.shutdown []
-  (t.shutdown))
+  (fn tui.shutdown []
+    (t.shutdown))
 
-(fn tui.handle-command [command params]
-  (case command
-    :set-screensize (screen-size.set params)
+  (fn tui.handle-command [command params]
+    (case command
+      :set-screensize (screen-size.set params)
 
-    :select-screen (do
-                     (active-screen.set params.screen-id)
-                     (active-window-key.set nil))
+      :select-screen (do
+                       (active-screen.set params.screen-id)
+                       (active-window-key.set nil))
 
-    :select-window (active-window-key.set (. params :window-key))
+      :select-window (active-window-key.set (. params :window-key))
 
-    :add-event (let [current-events (events.get)
-                     next-events (tablex.copy current-events)]
-                 (table.insert next-events params)
-                 (events.set next-events)
-                 (when (= 0 (length current-events))
-                   (active-event-no.set 1)))
+      :add-event (let [current-events (events.get)
+                       next-events (tablex.copy current-events)]
+                   (table.insert next-events params)
+                   (events.set next-events)
+                   (when (= 0 (length current-events))
+                     (active-event-no.set 1)))
 
-    :move-cursor (case (active-window-key.get)
-                   :1 (let [events-count (length (events.get))
-                            current-active-event-no (active-event-no.get)]
-                        (when current-active-event-no
-                          (case params.direction
-                            :up (when (< 1 current-active-event-no)
-                                  (active-event-no.set (- current-active-event-no 1)))
-                            :down (when (< current-active-event-no events-count)
-                                    (active-event-no.set (+ current-active-event-no 1)))))))
-    ))
+      :move-cursor (case (active-window-key.get)
+                     :1 (let [events-count (length (events.get))
+                              current-active-event-no (active-event-no.get)]
+                          (when current-active-event-no
+                            (case params.direction
+                              :up (when (< 1 current-active-event-no)
+                                    (active-event-no.set (- current-active-event-no 1)))
+                              :down (when (< current-active-event-no events-count)
+                                      (active-event-no.set (+ current-active-event-no 1)))))))))
 
-tui)
+  tui)
 
 {:make-tui make-tui
  :usable-termsize usable-termsize}
