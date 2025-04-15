@@ -116,12 +116,29 @@
                     hash = "sha256-OOBe5j9sE8c5YBa9J9J1Qu5C+U8/A0WCS8K/OAGOUC0=";
                   };
                 };
+                fennel-1-5-3 = buildLuarocksPackage {
+                  pname = "fennel";
+                  version = "1.5.3-1";
+
+                  disabled = luaOlder "5.1";
+
+                  src = fetchFromGitHub {
+                    owner = "bakpakin";
+                    repo = "Fennel";
+                    rev = "1.5.3";
+                    hash = "sha256-7Tq6Vx032jxnfPmtsKiTBQ/yH8vHO8+wMoQHZSIevWY=";
+                  };
+                  knownRockspec = fetchurl {
+                    url = "https://luarocks.org/manifests/fennel/fennel-1.5.3-1.rockspec";
+                    hash = "sha256-OTVgF9BDedILxS5ygFHHP/7h/SmMfGICAzPSb5Rakdo=";
+                  };
+                };
               in
               [
                 coxpcall
                 cjson
                 copas
-                fennel
+                fennel-1-5-3
                 inspect
                 luautf8
                 penlight
