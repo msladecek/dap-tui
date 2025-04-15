@@ -11,7 +11,7 @@ Unstable. Work in progress.
 The enviroment is declared in a [nix flake](https://nixos.wiki/wiki/flakes) file.
 
 1. [Install `nix` on your system](https://nixos.org/download/)
-2. Activate the environment `nix --experimental-features 'nix-command flakes' develop`
+2. Activate the environment with `nix --experimental-features 'nix-command flakes' develop`
 3. Run the application using `fennel ./dap-tui/main.fnl`
 
 The application expects to find a running DAP server on port 5678.
