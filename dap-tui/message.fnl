@@ -40,7 +40,11 @@
     (let [content (socket:receive (. message.headers "Content-Length"))]
       (set message.content-raw content)
       (set message.content (cjson.decode content))))
-  message)
+
+  message
+  ; (when (< 0 (length message.headers))
+  ;   message)
+  )
 
 (fn make-request [seq command arguments]
   (let [content-data {:seq seq

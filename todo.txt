@@ -1,4 +1,3 @@
-TODO keybindings in popup window when ? is pressed
 MAYBE helper context managers for terminal sequence building (fennel macros?)
   (with-text-attrs {...}
     ; push stack at the start
@@ -10,7 +9,9 @@ MAYBE helper context managers for terminal sequence building (fennel macros?)
     ) ; flush the buffer at the end
 MAYBE distribute with homebrew?
 TODO basic debug view
-  source code, stack trace, variables
+  source code
+  [done] stack trace
+  [done] variables
 TODO report bug in debugpy (connect argument being required in attach call)
 TODO unify terminology `active`, `selected`, `focused`
 TODO content scrolling; horizontal and vertical
@@ -24,8 +25,8 @@ TODO automatic cell unhooking
   2. register all child cells (cells defined within the expr of the parent cell)
   3. when the value changes unhook all child cells from their dependencies
 TODO windows as lists of cells
-  each line represents a cell
-  when drawing, instead of writing text to stdout, set text in a specific line cell
+  [done] each line represents a cell
+  [done] when drawing, instead of writing text to stdout, set text in a specific line cell
   implement scrolling and overflow on the level of lines
 TODO generic tui function - takes layout and component specifications
 TODO put the keybindings documentation and their implementation nearer together

@@ -64,7 +64,7 @@
 
   (local sock (copas.wrap (assert (socket.tcp))))
   (sock:connect "localhost" 5678)
-  (sock:settimeout 0)
+  (sock:settimeout 1)
 
   (fn send-request [request]
     (tui.handle-command
@@ -82,7 +82,7 @@
     (fn []
       (while should-run?
         (let [message (read-message sock)]
-          (when message
+          (when (and message (?. message :content :type))
             (handler.handle-message message))))))
 
   (copas.timer.new

@@ -6,6 +6,9 @@
 
 (var -callback-binding nil)
 
+;; TODO optionally return old value from cell
+;; TODO when-let macro
+
 (fn make-cell [initial-value]
   (local cell {:value initial-value :callbacks {}})
 
@@ -92,7 +95,7 @@
     formatted))
 
 (fn write [data]
-  (local debug false)
+  (local debug true)
   (when data
     (local delay 0.05)
     (local batch-size 100)
@@ -203,21 +206,21 @@
              (each [_ variable (ipairs event.content.content.body.variables)]
                (tset variables variable.name variable.value)))
            variables))
-       inspect
-       (stringx.splitlines)))
+       inspect))
 
 (fn events->stack-trace [events]
-  (accumulate [stack-trace []
-               _ event (pairs events)]
-    (let [content (?. event :content :content)]
-      (case [(?. content :type)
-             (?. content :command)]
-        [:response :stackTrace]
-        (each [_ frame (ipairs content.body.stackFrames)]
-          (table.insert stack-trace
-                        (.. frame.source.path ":" frame.line
-                            " - " frame.name))))
-      stack-trace)))
+  (->> (accumulate [stack-trace []
+                    _ event (pairs events)]
+         (let [content (?. event :content :content)]
+           (case [(?. content :type)
+                  (?. content :command)]
+             [:response :stackTrace]
+             (each [_ frame (ipairs content.body.stackFrames)]
+               (table.insert stack-trace
+                             (.. frame.source.path ":" frame.line
+                                 " - " frame.name))))
+           stack-trace))
+       (stringx.join "\n")))
 
 (fn events->breakpoint-details [events]
   (->> (accumulate [breakpoint-details {}
@@ -231,8 +234,7 @@
                (tset breakpoint-details :description content.body.description)
                (tset breakpoint-details :text content.body.text)))
            breakpoint-details))
-       inspect
-       (stringx.splitlines)))
+       inspect))
 
 (fn make-tui []
   (local events (make-list-cell))
@@ -277,30 +279,9 @@
             (if focused? (t.text.attr_seq {:fg "yellow"}) (t.text.attr_seq {}))
             (t.draw.box_seq plan.size.height plan.size.width my-box-fmt false title)))))
 
-  (fn draw-lines [plan lines]
-    (when plan
-      (write
-        (accumulate [str-so-far (.. (t.cursor.position.set_seq plan.location.row plan.location.column)
-                                    (t.clear.box_seq plan.size.height plan.size.width))
-                     line-no line (ipairs (or lines []))]
-          (.. str-so-far
-              (t.cursor.position.set_seq (- (+ line-no plan.location.row) 1)
-                                         plan.location.column)
-              line)))))
-
-  (fn line-content-fn [lines]
-    (fn [window]
-      (let [window-plan window.plan
-            content-plan (->cell [window-plan]
-                                 (window-plan->content-plan window-plan))
-            content (->cell [content-plan lines]
-                            {:plan content-plan
-                             :lines lines})]
-        (->cell [content]
-                (draw-lines content.plan content.lines)))))
-
   (fn make-window [id title params]
-    (let [plan (->cell [drawing-plan] (. drawing-plan id))
+    (let [plan (->cell [drawing-plan]
+                       (. drawing-plan id))
           params (or params {})
           window-key (. params :key)
           title (if window-key
@@ -313,84 +294,85 @@
                                :plan plan})
           border (->cell [border-data]
                          (draw-border border-data.plan title border-data.focused?))
+          content-plan (->cell [plan]
+                               (window-plan->content-plan plan))
+          content-cell (or params.content-cell (->cell ""))
+          content-cell-lines (->cell [content-cell]
+                                     (stringx.splitlines (or content-cell "")))
+          content-lines []
+          line-plans []
+          printers []
           window {:id id
                   :title title
                   :params params
                   :plan plan
                   :border border}]
 
-      (when params.content-fn
-        (set window.content (params.content-fn window)))
+      (->cell (let [content-plan2 (content-plan.get)]
+                (when content-plan2
+                  (let [content-cell-lines2 (content-cell-lines.get)]
+                    (for [line-no (+ 1 (length content-lines)) (math.max (length content-cell-lines2)
+                                                                         content-plan2.size.height)]
+                      (let [content-line (->cell [content-cell-lines]
+                                                 (or (. content-cell-lines line-no) ""))]
+                        (table.insert content-lines content-line))))
 
-      window))
+                  (for [line-no (+ 1 (length line-plans)) content-plan2.size.height]
+                    (let [plan (->cell [content-plan]
+                                       (when (and content-plan (<= line-no content-plan.size.height))
+                                         {:size {:height 1 :width content-plan.size.width}
+                                          :location {:row (- (+ line-no content-plan.location.row) 1)
+                                                     :column content-plan.location.column}}))]
+                      (table.insert line-plans plan)))
 
-  (fn make-event-list [id title params]
-    (fn draw-event-item [item]
-      (when item.content-plan
-        (let [prefix (if item.active? "> " "  ")
-              line-seq (t.cursor.position.set_seq (- (+ item.content-plan.location.row item.event-no) 1)
-                                                  item.content-plan.location.column)]
-          (write (.. (t.text.attr_seq {})
-                     line-seq
-                     (string.rep " " item.content-plan.size.width)
-                     line-seq
-                     prefix
-                     item.event.label)))))
-
-    (fn clear-below-events [plan event-count]
-      (when plan
-        (write
-          (.. (t.cursor.position.set_seq (+ event-count plan.location.row) plan.location.column)
-              (t.clear.box_seq (- plan.size.height event-count) plan.size.width)))))
-
-    (let [window (make-window id title params)
-          window-plan window.plan
-          content-plan (->cell [window-plan]
-                               (window-plan->content-plan window-plan))
-          event-items []]
-
-      (->cell [events]
-              (each [event-no event (ipairs events)]
-                (when (not (. event-items event-no))
-                  (table.insert
-                    event-items
-                    (let [item (->cell [active-event-no content-plan]
-                                       {:active? (= event-no active-event-no)
-                                        :event-no event-no
-                                        :event event
-                                        :content-plan content-plan})]
-                      (->cell [item]
-                              (draw-event-item item))
-                      item)))))
-      (->cell [events content-plan]
-              (clear-below-events content-plan (length events)))
+                  (for [line-no (+ 1 (length printers)) content-plan2.size.height]
+                    (let [line-plan (. line-plans line-no)
+                          content-line (. content-lines line-no)]
+                      (when content-line
+                        (let [printer (->cell [line-plan content-line]
+                                              (when line-plan
+                                                (write
+                                                  (.. (t.text.attr_seq {})
+                                                      (t.cursor.position.set_seq line-plan.location.row line-plan.location.column)
+                                                      (string.sub content-line 1 line-plan.size.width)
+                                                      (string.rep " " (- line-plan.size.width (length content-line)))))))]
+                          (table.insert printers printer))))))))
       window))
 
   (local windows
-    [(make-event-list :event-list "Event List"
-                      {:key :1})
+    [(make-window :event-list "Event List"
+                  {:key :1
+                   :content-cell (->cell [events active-event-no]
+                                         (->> (icollect [event-no event (ipairs events)]
+                                               (let [active? (= event-no active-event-no)
+                                                     prefix (if active? "> " "  ")]
+                                                 (.. prefix event.label)) )
+                                              (stringx.join "\n")))})
      (make-window :event-details "Event Details"
                   {:key :2
-                   :content-fn (line-content-fn
-                                 (->cell [active-event] 
+                   :content-cell (->cell [active-event]
                                          (when active-event
                                            (let [content-raw (?. active-event :content :content-raw) ]
-                                             (stringx.splitlines (if content-raw
-                                                                   (format-with-jq content-raw)
-                                                                   (inspect active-event)))))))})
+                                             (if content-raw
+                                               (format-with-jq content-raw)
+                                               (inspect active-event)))))})
      (make-window :keybindings "Keybindings"
-                  {:content-fn (line-content-fn
-                                 (->cell ["q: quit"
-                                          "r: run"
-                                          "c: continue"
-                                          "E/D: events view / debugger view"
-                                          "1/2/...: Change focused window"]))})
+                  {:content-cell
+                   (->cell (->> ["q: quit"
+                                 "r: run"
+                                 "c: continue"
+                                 "E/D: events view / debugger view"
+                                 "1/2/...: Change focused window"]
+                                (stringx.join "\n")))})
+
      (make-window :variables "Variables"
-                  {:content-fn (line-content-fn (->cell [events] (events->variables events)))})
+                  {:content-cell (->cell [events] (events->variables events))})
+
      (make-window :stack-trace "Stack Trace"
-                  {:content-fn (line-content-fn (->cell [events] (events->stack-trace events)))})
+                  {:content-cell (->cell [events] (events->stack-trace events))})
+
      (make-window :breakpoint-details "Breakpoint Details"
-                  {:content-fn (line-content-fn (->cell [events] (events->breakpoint-details events)))})])
+                  {:content-cell (->cell [events] (events->breakpoint-details events))})])
 
   (local tui {})
 
