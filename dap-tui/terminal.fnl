@@ -46,6 +46,21 @@
 
   cell)
 
+(fn make-list-cell []
+  (local cell (make-cell []))
+  (-cell-count.set (+ 1 (-cell-count.get)))
+
+  (set (. cell :set) nil)
+
+  (fn cell.append [item]
+    (when item
+      (table.insert cell.value item)
+      (each [callback _ (pairs cell.callbacks)]
+        (callback cell.value)))
+    cell.value)
+
+  cell)
+
 (macro ->cell [& args]
   (case args
     (where [deps & exprs] (and (< 0 (length exprs))
@@ -220,7 +235,7 @@
        (stringx.splitlines)))
 
 (fn make-tui []
-  (local events (->cell []))
+  (local events (make-list-cell))
   (local screen-size (->cell (usable-termsize)))
   (local active-screen (->cell nil))
   (local active-window-key (->cell nil))
@@ -400,11 +415,8 @@
 
       :select-window (active-window-key.set (. params :window-key))
 
-      :add-event (let [current-events (events.get)
-                       next-events (tablex.copy current-events)]
-                   (table.insert next-events params)
-                   (events.set next-events)
-                   (when (= 0 (length current-events))
+      :add-event (let [new-events (events.append params) ]
+                   (when (= 1 (length new-events))
                      (active-event-no.set 1)))
 
       :move-cursor (case (active-window-key.get)
