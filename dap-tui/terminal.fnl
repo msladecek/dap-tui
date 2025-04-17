@@ -6,8 +6,11 @@
 
 (var -callback-binding nil)
 
-;; TODO optionally return old value from cell
-;; TODO when-let macro
+(macro when-let [[s v & binds] & body]
+  `(let [,s ,v]
+     (when ,s
+       (let [,(unpack binds)]
+         ,(unpack body)))))
 
 (fn make-cell [initial-value]
   (local cell {:value initial-value :callbacks {}})
@@ -95,7 +98,7 @@
     formatted))
 
 (fn write [data]
-  (local debug true)
+  (local debug false)
   (when data
     (local delay 0.05)
     (local batch-size 100)
@@ -308,7 +311,7 @@
                   :plan plan
                   :border border}]
 
-      (->cell (let [content-plan2 (content-plan.get)]
+      (->cell (when-let [content-plan2 (content-plan.get)]
                 (when content-plan2
                   (let [content-cell-lines2 (content-cell-lines.get)]
                     (for [line-no (+ 1 (length content-lines)) (math.max (length content-cell-lines2)
@@ -326,17 +329,16 @@
                       (table.insert line-plans plan)))
 
                   (for [line-no (+ 1 (length printers)) content-plan2.size.height]
-                    (let [line-plan (. line-plans line-no)
-                          content-line (. content-lines line-no)]
-                      (when content-line
-                        (let [printer (->cell [line-plan content-line]
-                                              (when line-plan
-                                                (write
-                                                  (.. (t.text.attr_seq {})
-                                                      (t.cursor.position.set_seq line-plan.location.row line-plan.location.column)
-                                                      (string.sub content-line 1 line-plan.size.width)
-                                                      (string.rep " " (- line-plan.size.width (length content-line)))))))]
-                          (table.insert printers printer))))))))
+                    (when-let [content-line (. content-lines line-no)
+                               line-plan (. line-plans line-no)]
+                      (let [printer (->cell [line-plan content-line]
+                                            (when line-plan
+                                              (write
+                                                (.. (t.text.attr_seq {})
+                                                    (t.cursor.position.set_seq line-plan.location.row line-plan.location.column)
+                                                    (string.sub content-line 1 line-plan.size.width)
+                                                    (string.rep " " (- line-plan.size.width (length content-line)))))))]
+                        (table.insert printers printer)))))))
       window))
 
   (local windows
@@ -402,14 +404,13 @@
                      (active-event-no.set 1)))
 
       :move-cursor (case (active-window-key.get)
-                     :1 (let [events-count (length (events.get))
-                              current-active-event-no (active-event-no.get)]
-                          (when current-active-event-no
-                            (case params.direction
-                              :up (when (< 1 current-active-event-no)
-                                    (active-event-no.set (- current-active-event-no 1)))
-                              :down (when (< current-active-event-no events-count)
-                                      (active-event-no.set (+ current-active-event-no 1)))))))))
+                     :1 (when-let [current-active-event-no (active-event-no.get)
+                                   events-count (length (events.get))]
+                          (case params.direction
+                            :up (when (< 1 current-active-event-no)
+                                  (active-event-no.set (- current-active-event-no 1)))
+                            :down (when (< current-active-event-no events-count)
+                                    (active-event-no.set (+ current-active-event-no 1))))))))
 
   tui)
 
