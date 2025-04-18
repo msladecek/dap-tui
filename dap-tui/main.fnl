@@ -107,12 +107,18 @@
           :r (handler.handle-command :run)
           :c (handler.handle-command :continue)
 
+          :? (tui.handle-command :toggle-popup {:window-id :keybindings})
+          :q (tui.handle-command :toggle-popup {:window-id :quit-dialog})
+
+          :y (when (= :quit-dialog tui.popup-window)
+               (set should-run? false))
+          :n (when (= :quit-dialog tui.popup-window)
+               (tui.handle-command :toggle-popup {:window-id :quit-dialog}))
+
           :h (tui.handle-command :move-cursor {:direction :left})
           :j (tui.handle-command :move-cursor {:direction :down})
           :k (tui.handle-command :move-cursor {:direction :up})
           :l (tui.handle-command :move-cursor {:direction :right})
-
-          :q (set should-run? false)
 
           _ (tui.handle-command
               :add-event

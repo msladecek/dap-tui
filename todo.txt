@@ -30,6 +30,8 @@ TODO windows as lists of cells
   implement scrolling and overflow on the level of lines
 TODO generic tui function - takes layout and component specifications
 TODO put the keybindings documentation and their implementation nearer together
-TODO floating windows
-TODO popup: confirm before quit
-TODO popup: help window - press `?` to show
+[done] popup: confirm before quit
+[done] popup: help window - press `?` to show
+TODO popup: redraw affected borders
+TODO share code between make-window and make-popup-window
+TODO keybinding to toggle slow drawing mode
