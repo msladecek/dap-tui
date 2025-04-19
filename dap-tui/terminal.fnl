@@ -211,7 +211,7 @@
            variables))
        inspect))
 
-(fn events->stack-trace [events]
+(fn events->stack-trace [events active-frame]
   (->> (accumulate [stack-trace []
                     _ event (pairs events)]
          (let [content (?. event :content :content)]
@@ -220,7 +220,8 @@
              [:response :stackTrace]
              (each [_ frame (ipairs content.body.stackFrames)]
                (table.insert stack-trace
-                             (.. frame.source.path ":" frame.line
+                             (.. (if (= (?. active-frame :id) frame.id) "> " "  ")
+                                 frame.source.path ":" frame.line
                                  " - " frame.name))))
            stack-trace))
        (stringx.join "\n")))
@@ -239,6 +240,18 @@
            breakpoint-details))
        inspect))
 
+(fn events->source [events active-frame]
+  (when active-frame
+    (accumulate [source ""
+                 _ event (ipairs events)]
+      (if (= :sources-loaded event.type)
+        (let [lines (. event.content active-frame.source.path)]
+          (->> (icollect [line-no line (ipairs lines)]
+                 (let [prefix (if (= line-no active-frame.line) ">> " "   ")]
+                   (.. prefix line)))
+               (stringx.join "\n")))
+        source))))
+
 (fn make-tui []
   (local events (make-list-cell))
   (local screen-size (->cell (usable-termsize)))
@@ -248,6 +261,7 @@
   (local active-event (->cell [events active-event-no]
                               (when (and events active-event-no)
                                 (. events active-event-no))))
+  (local active-frame (->cell nil))
   (local popup-window (->cell nil))
 
   (local layouts
@@ -260,9 +274,16 @@
                         {:id :event-details
                          :size 4}]}
      :debug {:type :vertical-split
-             :content [{:id :variables}
-                       {:id :stack-trace}
-                       {:id :breakpoint-details}]}})
+             :content [{:type :horizontal-split
+                        :id :debug-upper-section
+                        :content [{:id :breakpoint-details}
+                                  {:id :variables}]}
+                       {:type :horizontal-split
+                        :id :debug-lower-section
+                        :size 3
+                        :content [{:id :stack-trace}
+                                  {:id :source
+                                   :size 3}]}]}})
 
   (local popup-window-layouts
     {:keybindings {:id :keybindings}
@@ -473,7 +494,7 @@
                    :content-cell (->cell [active-event]
                                          (when active-event
                                            (let [content-raw (?. active-event :content :content-raw) ]
-                                             (if content-raw
+                                             (if (and false content-raw)
                                                (format-with-jq content-raw)
                                                (inspect active-event)))))})
      (make-window :keybindings "Keybindings"
@@ -485,13 +506,21 @@
                                               (stringx.join "\n")))})
 
      (make-window :variables "Variables"
-                  {:content-cell (->cell [events] (events->variables events))})
+                  {:content-cell (->cell [events]
+                                         (events->variables events))})
 
      (make-window :stack-trace "Stack Trace"
-                  {:content-cell (->cell [events] (events->stack-trace events))})
+                  {:key :1
+                   :content-cell (->cell [events active-frame]
+                                         (events->stack-trace events active-frame))})
+
+     (make-window :source "Source"
+                  {:content-cell (->cell [events active-frame]
+                                         (events->source events active-frame))})
 
      (make-window :breakpoint-details "Breakpoint Details"
-                  {:content-cell (->cell [events] (events->breakpoint-details events))})])
+                  {:content-cell (->cell [events] 
+                                         (events->breakpoint-details events))})])
 
   (local tui {})
   (->cell [popup-window]
@@ -518,9 +547,13 @@
 
       :select-window (active-window-key.set (. params :window-key))
 
-      :add-event (let [new-events (events.append params) ]
+      :add-event (let [new-events (events.append params)]
                    (when (= 1 (length new-events))
-                     (active-event-no.set 1)))
+                     (active-event-no.set 1))
+                   (when (and (not (active-frame.get))
+                              (= :response (?. params :content :content :type))
+                              (= :stackTrace (?. params :content :content :command)))
+                     (active-frame.set (?. params :content :content :body :stackFrames 1))))
 
       :move-cursor (case (active-window-key.get)
                      :1 (when-let [current-active-event-no (active-event-no.get)

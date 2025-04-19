@@ -12,6 +12,10 @@
         :read-message read-message}
   (require :dap-tui.message))
 
+(fn load-source [path]
+  (icollect [line (io.lines path)]
+    line))
+
 (fn make-handler [tui send-request]
   (var seq 1)
   (fn seq-next []
@@ -41,8 +45,18 @@
       (request :stackTrace {:threadId message.content.body.threadId})
 
       [:response :stackTrace]
-      (each [_ frame (ipairs message.content.body.stackFrames)]
-        (request :scopes {:frameId frame.id}))
+      (let [sources {}]
+        (each [_ frame (ipairs message.content.body.stackFrames)]
+          (request :scopes {:frameId frame.id})
+
+          (let [path frame.source.path]
+            (set (. sources path) (load-source path))))
+
+        (tui.handle-command
+          :add-event
+          {:label "sources loaded"
+           :type :sources-loaded
+           :content sources}))
 
       [:response :scopes]
       (each [_ scope (ipairs message.content.body.scopes)]

@@ -35,3 +35,4 @@ TODO put the keybindings documentation and their implementation nearer together
 TODO popup: redraw affected borders
 TODO share code between make-window and make-popup-window
 TODO keybinding to toggle slow drawing mode
+TODO mark the origin of each event dap/app
