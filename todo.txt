@@ -24,7 +24,16 @@ TODO windows as lists of cells
   [done] each line represents a cell
   [done] when drawing, instead of writing text to stdout, set text in a specific line cell
   implement scrolling and overflow on the level of lines
-TODO generic tui function - takes layout and component specifications
+MAYBE generic tui function - takes layout and component specifications
 TODO put the keybindings documentation and their implementation nearer together
 TODO keybinding to toggle slow drawing mode
-TODO mark the origin of each event dap/app
+[canceled] mark the origin of each event dap/app
+TODO shared write buffer so there is only one flush per interface updated
+TODO source window: add line numbers
+TODO commands
+  1. next
+  2. step in
+  3. step out
+  4. add breakpoint (line number as input)
+  5. evaluate (code as input)
+  6. watch expression (expression as input)

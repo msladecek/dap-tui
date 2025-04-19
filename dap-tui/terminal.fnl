@@ -387,8 +387,7 @@
                                                                                 " <" variable.type ">"
                                                                                 " = " variable.value))))
                                                     lines))
-                                                (stringx.join "\n")))
-                                         )})
+                                                (stringx.join "\n"))))})
      (make-window :stack-trace "Stack Trace"
                   {:key :1
                    :content-cell (->cell [stack-trace active-frame-no]
