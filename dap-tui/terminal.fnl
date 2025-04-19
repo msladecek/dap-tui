@@ -52,21 +52,6 @@
 
   cell)
 
-(fn make-list-cell []
-  (local cell (make-cell []))
-  (-cell-count.set (+ 1 (-cell-count.get)))
-
-  (set (. cell :set) nil)
-
-  (fn cell.append [item]
-    (when item
-      (table.insert cell.value item)
-      (each [callback _ (pairs cell.callbacks)]
-        (callback cell.value)))
-    cell.value)
-
-  cell)
-
 (macro ->cell [& args]
   (case args
     (where [deps & exprs] (and (< 0 (length exprs))
@@ -199,33 +184,6 @@
 
   drawing-plan)
 
-(fn events->variables [events]
-  (->> (accumulate [variables {}
-                    _ event (pairs events)]
-         (do
-           (case [(?. event :content :content :type)
-                  (?. event :content :content :command)]
-             [:response :variables]
-             (each [_ variable (ipairs event.content.content.body.variables)]
-               (tset variables variable.name variable.value)))
-           variables))
-       inspect))
-
-(fn events->stack-trace [events active-frame]
-  (->> (accumulate [stack-trace []
-                    _ event (pairs events)]
-         (let [content (?. event :content :content)]
-           (case [(?. content :type)
-                  (?. content :command)]
-             [:response :stackTrace]
-             (each [_ frame (ipairs content.body.stackFrames)]
-               (table.insert stack-trace
-                             (.. (if (= (?. active-frame :id) frame.id) "> " "  ")
-                                 frame.source.path ":" frame.line
-                                 " - " frame.name))))
-           stack-trace))
-       (stringx.join "\n")))
-
 (fn events->breakpoint-details [events]
   (->> (accumulate [breakpoint-details {}
                     _ event (pairs events)]
@@ -240,28 +198,53 @@
            breakpoint-details))
        inspect))
 
-(fn events->source [events active-frame]
-  (when active-frame
-    (accumulate [source ""
-                 _ event (ipairs events)]
-      (if (= :sources-loaded event.type)
-        (let [lines (. event.content active-frame.source.path)]
-          (->> (icollect [line-no line (ipairs lines)]
-                 (let [prefix (if (= line-no active-frame.line) ">> " "   ")]
-                   (.. prefix line)))
-               (stringx.join "\n")))
-        source))))
-
 (fn make-tui []
-  (local events (make-list-cell))
+  (local events (->cell []))
   (local screen-size (->cell (usable-termsize)))
   (local active-screen (->cell nil))
-  (local active-window-key (->cell nil))
+  (local active-window (->cell nil))
   (local active-event-no (->cell nil))
   (local active-event (->cell [events active-event-no]
                               (when (and events active-event-no)
                                 (. events active-event-no))))
-  (local active-frame (->cell nil))
+  (local stack-trace (->cell [events]
+                             (let [frames []
+                                   frames-by-request-seq {}
+                                   scopes-by-frame-id {}
+                                   variables-requests-by-scope-variable-reference {}
+                                   variables-responses-by-request-seq {}]
+                               (each [_ event (pairs events)]
+                                 (let [content (?. event :content :content)]
+                                   (case [(?. content :type) (?. content :command)]
+                                     [:response :stackTrace]
+                                     (each [_ frame (ipairs content.body.stackFrames)]
+                                       (table.insert frames frame))
+
+                                     [:request :scopes]
+                                     (set (. frames-by-request-seq content.seq) content.arguments.frameId)
+
+                                     [:response :scopes]
+                                     (let [frame-id (. frames-by-request-seq content.request_seq)]
+                                       (set (. scopes-by-frame-id frame-id) content.body.scopes))
+
+                                     [:request :variables]
+                                     (set (. variables-requests-by-scope-variable-reference content.arguments.variablesReference) content)
+
+                                     [:response :variables]
+                                     (set (. variables-responses-by-request-seq content.request_seq) content.body.variables))))
+                               (each [_ frame (ipairs frames)]
+                                 (set (. frame :event-count) (length events))
+                                 (set (. frame :scopes) [])
+                                 (each [scope-no scope (ipairs (or (. scopes-by-frame-id frame.id) []))]
+                                   (table.insert frame.scopes scope)
+                                   (when-let [variables-request (. variables-requests-by-scope-variable-reference scope.variablesReference)]
+                                     (when-let [variables-response (. variables-responses-by-request-seq variables-request.seq)]
+                                       (set (. scope :variables) variables-response)))))
+                               frames)))
+  (local active-frame-no (->cell nil))
+  (local active-frame (->cell [stack-trace active-frame-no]
+                              (when (and stack-trace active-frame-no)
+                                (. stack-trace active-frame-no))))
   (local popup-window (->cell nil))
 
   (local layouts
@@ -286,7 +269,7 @@
                                    :size 3}]}]}})
 
   (local popup-window-layouts
-    {:keybindings {:id :keybindings}
+    {:keybindings-popup {:id :keybindings-popup}
      :quit-dialog {:id :quit-dialog}})
 
   (local drawing-plan
@@ -371,12 +354,12 @@
     (let [plan (->cell [drawing-plan]
                        (. drawing-plan id))
           params (or params {})
-          window-key (. params :key)
+          window-key params.key
           title (if window-key
                   (.. (tostring window-key) ": " title)
                   title)
-          focused? (->cell [active-window-key]
-                           (and window-key (= window-key active-window-key)))
+          focused? (->cell [active-window]
+                           (= id active-window))
           border-data (->cell [focused? plan]
                               {:focused? focused?
                                :plan plan})
@@ -465,10 +448,12 @@
                                                        (pad-line content-line line-plan)))))]
                       (table.insert printers printer))))))
 
-      {:border border}))
+      {:border border
+       :id id
+       :title title}))
 
-  (local windows
-    [(make-popup-window :keybindings "Keybindings"
+  (local windows-
+    [(make-popup-window :keybindings-popup "Keybindings"
                         {:content-cell (->cell
                                          (->> ["q: quit"
                                                "r: run"
@@ -493,8 +478,8 @@
                   {:key :2
                    :content-cell (->cell [active-event]
                                          (when active-event
-                                           (let [content-raw (?. active-event :content :content-raw) ]
-                                             (if (and false content-raw)
+                                           (let [content-raw (?. active-event :content :content-raw)]
+                                             (if content-raw
                                                (format-with-jq content-raw)
                                                (inspect active-event)))))})
      (make-window :keybindings "Keybindings"
@@ -504,23 +489,48 @@
                                                "E/D: events view / debugger view"
                                                "1/2/...: Change focused window"]
                                               (stringx.join "\n")))})
-
      (make-window :variables "Variables"
-                  {:content-cell (->cell [events]
-                                         (events->variables events))})
-
+                  {:content-cell (->cell [active-frame stack-trace]
+                                         (when active-frame
+                                           (->> (accumulate [lines []
+                                                             _ scope (ipairs active-frame.scopes)]
+                                                  (do
+                                                    (table.insert lines scope.name)
+                                                    (each [_ variable (ipairs (or scope.variables []))]
+                                                      (when (not= "" variable.type)
+                                                        (table.insert lines (.. "  " variable.name
+                                                                                " <" variable.type ">"
+                                                                                " = " variable.value))))
+                                                    lines))
+                                                (stringx.join "\n")))
+                                         )})
      (make-window :stack-trace "Stack Trace"
                   {:key :1
-                   :content-cell (->cell [events active-frame]
-                                         (events->stack-trace events active-frame))})
-
+                   :content-cell (->cell [stack-trace active-frame-no]
+                                         (->> (icollect [frame-no frame (ipairs stack-trace)]
+                                                (.. (if (= active-frame-no frame-no) "> " "  ")
+                                                    frame.source.path ":" frame.line
+                                                    " - " frame.name))
+                                              (stringx.join "\n")))})
      (make-window :source "Source"
                   {:content-cell (->cell [events active-frame]
-                                         (events->source events active-frame))})
-
+                                         (when active-frame
+                                           (accumulate [source ""
+                                                        _ event (ipairs events)]
+                                             (if (= :sources-loaded event.type)
+                                               (let [lines (. event.content active-frame.source.path)]
+                                                 (->> (icollect [line-no line (ipairs lines)]
+                                                        (let [prefix (if (= line-no active-frame.line) ">> " "   ")]
+                                                          (.. prefix line)))
+                                                      (stringx.join "\n")))
+                                               source))))})
      (make-window :breakpoint-details "Breakpoint Details"
-                  {:content-cell (->cell [events] 
+                  {:content-cell (->cell [events]
                                          (events->breakpoint-details events))})])
+
+  (local windows (collect [_ window (ipairs windows-)]
+                   (values window.id window)))
+
 
   (local tui {})
   (->cell [popup-window]
@@ -543,26 +553,42 @@
 
       :select-screen (do
                        (active-screen.set params.screen-id)
-                       (active-window-key.set nil))
+                       (active-window.set nil))
 
-      :select-window (active-window-key.set (. params :window-key))
+      :select-window (accumulate [selected-window-id nil
+                                  window-id window (pairs windows)]
+                       (active-window.set
+                         (if (and window.plan
+                                  (window.plan.get)
+                                  (= (?. window :params :key) params.window-key))
+                           window-id
+                           selected-window-id)))
 
-      :add-event (let [new-events (events.append params)]
+      :add-event (let [new-events (tablex.deepcopy (events.get))]
+                       (table.insert new-events params)
+                       (events.set new-events)
                    (when (= 1 (length new-events))
                      (active-event-no.set 1))
-                   (when (and (not (active-frame.get))
+                   (when (and (not (active-frame-no.get))
                               (= :response (?. params :content :content :type))
                               (= :stackTrace (?. params :content :content :command)))
-                     (active-frame.set (?. params :content :content :body :stackFrames 1))))
+                     (active-frame-no.set 1)))
 
-      :move-cursor (case (active-window-key.get)
-                     :1 (when-let [current-active-event-no (active-event-no.get)
-                                   events-count (length (events.get))]
-                          (case params.direction
-                            :up (when (< 1 current-active-event-no)
-                                  (active-event-no.set (- current-active-event-no 1)))
-                            :down (when (< current-active-event-no events-count)
-                                    (active-event-no.set (+ current-active-event-no 1))))))
+      :move-cursor (case (active-window.get)
+                     :event-list (when-let [current-active-event-no (active-event-no.get)
+                                            events-count (length (events.get))]
+                                   (case params.direction
+                                     :up (when (< 1 current-active-event-no)
+                                           (active-event-no.set (- current-active-event-no 1)))
+                                     :down (when (< current-active-event-no events-count)
+                                             (active-event-no.set (+ current-active-event-no 1)))))
+                     :stack-trace (when-let [current-active-frame-no (active-frame-no.get)
+                                             frame-count (length (stack-trace.get))]
+                                    (case params.direction
+                                      :up (when (< 1 current-active-frame-no)
+                                            (active-frame-no.set (- current-active-frame-no 1)))
+                                      :down (when (< current-active-frame-no frame-count)
+                                              (active-frame-no.set (+ current-active-frame-no 1))))))
 
       :toggle-popup (let [window-id params.window-id]
                       (if (not= (popup-window.get) window-id)
