@@ -245,7 +245,6 @@
   (local active-frame (->cell [stack-trace active-frame-no]
                               (when (and stack-trace active-frame-no)
                                 (. stack-trace active-frame-no))))
-  (local popup-window (->cell nil))
 
   (local layouts
     {:events {:type :horizontal-split
@@ -268,25 +267,11 @@
                                   {:id :source
                                    :size 3}]}]}})
 
-  (local popup-window-layouts
-    {:keybindings-popup {:id :keybindings-popup}
-     :quit-dialog {:id :quit-dialog}})
-
   (local drawing-plan
     (->cell [active-screen screen-size]
             (let [layout (. layouts active-screen)
                   location {:row 1 :column 1}]
               (make-drawing-plan layout location screen-size))))
-
-  (local popup-drawing-plan
-    (->cell [popup-window screen-size]
-            (when (and popup-window screen-size)
-              (let [location {:row (round (* (/ 1 3) screen-size.height))
-                              :column (round (* (/ 1 3) screen-size.width))}
-                    size {:height (round (* (/ 1 3) screen-size.height))
-                          :width (round (* (/ 1 3) screen-size.width))}
-                    layout (. popup-window-layouts popup-window)]
-                (. (make-drawing-plan layout location size) popup-window)))))
 
   (fn window-plan->content-plan [window-plan]
     (when window-plan
@@ -305,50 +290,6 @@
   (fn pad-line [content line-plan]
     (.. (string.sub content 1 line-plan.size.width)
         (string.rep " " (- line-plan.size.width (length content)))))
-
-  (fn intersect-with-popup [line-plan popup-plan content]
-    (let [start line-plan.location.column
-          end (+ start line-plan.size.width)
-          popup-start (?. popup-plan :location :column)
-          popup-end (when popup-start (+ popup-start popup-plan.size.width))
-          full-line (pad-line content line-plan)
-          no-intersect (.. (t.text.attr_seq {})
-                           (t.cursor.position.set_seq line-plan.location.row line-plan.location.column)
-                           full-line)]
-      (if
-        (not popup-plan)
-        no-intersect
-
-        (not (<= popup-plan.location.row line-plan.location.row (+ popup-plan.location.row popup-plan.size.height)))
-        no-intersect
-
-        (< start end popup-start popup-end)
-        no-intersect
-
-        (<= start popup-start end popup-end)
-        (.. (t.text.attr_seq {})
-            (t.cursor.position.set_seq line-plan.location.row line-plan.location.column)
-            (string.sub full-line 1 (- popup-start start)))
-
-        (< popup-start start end popup-end)
-        ""
-
-        (< popup-start start popup-end end)
-        (.. (t.text.attr_seq {})
-            (t.cursor.position.set_seq line-plan.location.row popup-end)
-            (string.sub full-line popup-end))
-
-        (< popup-end start)
-        (.. (t.text.attr_seq {})
-            (t.cursor.position.set_seq line-plan.location.row popup-end)
-            full-line)
-
-        (< start popup-start popup-end end)
-        (.. (t.text.attr_seq {})
-            (t.cursor.position.set_seq line-plan.location.row line-plan.location.column)
-            (string.sub full-line 1 (- popup-start start))
-            (t.cursor.position.set_seq line-plan.location.row popup-end)
-            (string.sub full-line (+ 1 (- popup-end start)) line-plan.size.width)))))
 
   (fn make-window [id title params]
     (let [plan (->cell [drawing-plan]
@@ -373,7 +314,6 @@
           content-lines []
           line-plans []
           printers []
-          popup-intersects []
           window {:id id
                   :title title
                   :params params
@@ -398,75 +338,20 @@
 
                 (for [line-no (+ 1 (length printers)) content-plan2.size.height]
                   (when-let [content-line (. content-lines line-no)
-                             line-plan (. line-plans line-no)]
-                    (let [popup-intersect (->cell [line-plan content-line popup-drawing-plan]
-                                                  (when line-plan
-                                                    (intersect-with-popup line-plan popup-drawing-plan content-line)))
-                          printer (->cell [popup-intersect]
-                                          (write popup-intersect))]
-                      (table.insert popup-intersects popup-intersect)
-                      (table.insert printers printer))))))
+                             line-plan (. line-plans line-no)
+                             printer (->cell [line-plan content-line]
+                                             (when (and line-plan content-line)
+                                               (let [full-line (pad-line content-line line-plan)
+                                                     position-seq (t.cursor.position.set_seq line-plan.location.row
+                                                                                             line-plan.location.column)]
+                                                 (write (.. (t.text.attr_seq {})
+                                                            position-seq
+                                                            full-line)))))]
+                      (table.insert printers printer)))))
       window))
 
-  (fn make-popup-window [id title params]
-    (let [border (->cell [popup-drawing-plan popup-window]
-                         (when (= id popup-window)
-                           (draw-border popup-drawing-plan title false)))
-          content-plan (->cell [popup-drawing-plan popup-window]
-                               (when (and popup-drawing-plan (= id popup-window))
-                                 (window-plan->content-plan popup-drawing-plan)))
-          content-cell (or params.content-cell (->cell ""))
-          content-cell-lines (->cell [content-cell]
-                                     (stringx.splitlines (or content-cell "")))
-          content-lines []
-          line-plans []
-          printers [] ]
-
-      (->cell (when-let [content-plan2 (content-plan.get)]
-                (let [content-cell-lines2 (content-cell-lines.get)]
-                  (for [line-no (+ 1 (length content-lines)) (math.max (length content-cell-lines2)
-                                                                       content-plan2.size.height)]
-                    (let [content-line (->cell [content-cell-lines]
-                                               (or (. content-cell-lines line-no) ""))]
-                      (table.insert content-lines content-line))))
-
-                (for [line-no (+ 1 (length line-plans)) content-plan2.size.height]
-                  (let [plan (->cell [content-plan]
-                                     (when (and content-plan (<= line-no content-plan.size.height))
-                                       {:size {:height 1 :width content-plan.size.width}
-                                        :location {:row (- (+ line-no content-plan.location.row) 1)
-                                                   :column content-plan.location.column}}))]
-                    (table.insert line-plans plan)))
-
-                (for [line-no (+ 1 (length printers)) content-plan2.size.height]
-                  (when-let [content-line (. content-lines line-no)
-                             line-plan (. line-plans line-no)]
-                    (let [printer (->cell [line-plan content-line]
-                                          (when line-plan
-                                            (write (.. (t.text.attr_seq {})
-                                                       (t.cursor.position.set_seq line-plan.location.row line-plan.location.column)
-                                                       (pad-line content-line line-plan)))))]
-                      (table.insert printers printer))))))
-
-      {:border border
-       :id id
-       :title title}))
-
   (local windows-
-    [(make-popup-window :keybindings-popup "Keybindings"
-                        {:content-cell (->cell
-                                         (->> ["q: quit"
-                                               "r: run"
-                                               "c: continue"
-                                               "E/D: events view / debugger view"
-                                               "1/2/...: Change focused window"]
-                                              (stringx.join "\n")))})
-     (make-popup-window :quit-dialog "Quit?"
-                        {:content-cell (->cell
-                                         (->> ["Quit?"
-                                               "[y]es / [n]o"]
-                                              (stringx.join "\n")))})
-     (make-window :event-list "Event List"
+    [(make-window :event-list "Event List"
                   {:key :1
                    :content-cell (->cell [events active-event-no]
                                          (->> (icollect [event-no event (ipairs events)]
@@ -533,8 +418,6 @@
 
 
   (local tui {})
-  (->cell [popup-window]
-          (set tui.popup-window popup-window))
 
   (fn tui.initialize []
     (t.initialize {:displaybackup true :filehandle io.stdout})
@@ -588,12 +471,7 @@
                                       :up (when (< 1 current-active-frame-no)
                                             (active-frame-no.set (- current-active-frame-no 1)))
                                       :down (when (< current-active-frame-no frame-count)
-                                              (active-frame-no.set (+ current-active-frame-no 1))))))
-
-      :toggle-popup (let [window-id params.window-id]
-                      (if (not= (popup-window.get) window-id)
-                        (popup-window.set params.window-id)
-                        (popup-window.set nil)))))
+                                              (active-frame-no.set (+ current-active-frame-no 1))))))))
 
   tui)
 

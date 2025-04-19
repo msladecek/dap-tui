@@ -8,8 +8,8 @@ MAYBE helper context managers for terminal sequence building (fennel macros?)
     ...
     ) ; flush the buffer at the end
 MAYBE distribute with homebrew?
-TODO basic debug view
-  source code
+[done] basic debug view
+  [done] source code
   [done] stack trace
   [done] variables
 TODO report bug in debugpy (connect argument being required in attach call)
@@ -32,7 +32,7 @@ TODO generic tui function - takes layout and component specifications
 TODO put the keybindings documentation and their implementation nearer together
 [done] popup: confirm before quit
 [done] popup: help window - press `?` to show
-TODO popup: redraw affected borders
-TODO share code between make-window and make-popup-window
+[cancel] popup: redraw affected borders
+[cancel] share code between make-window and make-popup-window
 TODO keybinding to toggle slow drawing mode
 TODO mark the origin of each event dap/app
