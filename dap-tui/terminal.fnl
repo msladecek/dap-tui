@@ -251,8 +251,9 @@
               :content [{:type :vertical-split
                          :id :left-sidebar
                          :content [{:id :event-list
-                                    :size 4}
-                                   {:id :keybindings}]}
+                                    :size 6}
+                                   {:id :keybindings}
+                                   {:id :info}]}
                         {:id :event-details
                          :size 4}]}
      :debug {:type :vertical-split
@@ -314,11 +315,11 @@
           content-lines []
           line-plans []
           printers []
-          window {:id id
-                  :title title
-                  :params params
-                  :plan plan
-                  :border border}]
+          window {: id
+                  : title
+                  : params
+                  : plan
+                  : border}]
 
       (->cell (when-let [content-plan2 (content-plan.get)]
                 (let [content-cell-lines2 (content-cell-lines.get)]
@@ -374,6 +375,12 @@
                                                "E/D: events view / debugger view"
                                                "1/2/...: Change focused window"]
                                               (stringx.join "\n")))})
+     (make-window :info "Info"
+                  {:content-cell (->cell [events -cell-count]
+                                         (when (and events -cell-count)
+                                           (->> [(.. "Events: " (tostring (length events)))
+                                                 (.. "Cells:  " (tostring -cell-count))]
+                                                (stringx.join "\n"))))})
      (make-window :variables "Variables"
                   {:content-cell (->cell [active-frame stack-trace]
                                          (when active-frame
