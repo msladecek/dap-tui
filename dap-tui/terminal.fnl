@@ -481,5 +481,5 @@
 
   tui)
 
-{:make-tui make-tui
- :usable-termsize usable-termsize}
+{: make-tui
+ : usable-termsize}

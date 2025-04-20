@@ -56,6 +56,6 @@
      :content-data content-data
      :content content-json}))
 
-{:write-message write-message
- :make-request make-request
- :read-message read-message}
+{: write-message
+ : make-request
+ : read-message}

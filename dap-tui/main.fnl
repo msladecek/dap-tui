@@ -4,12 +4,12 @@
 (local socket (require "socket"))
 (local t (require "terminal"))
 (local tablex (require "pl.tablex"))
-(local {:make-tui make-tui
-        :usable-termsize usable-termsize}
+(local {: make-tui
+        : usable-termsize}
   (require :dap-tui.terminal))
-(local {:write-message write-message
-        :make-request make-request
-        :read-message read-message}
+(local {: write-message
+        : make-request
+        : read-message}
   (require :dap-tui.message))
 
 (fn load-source [path]
