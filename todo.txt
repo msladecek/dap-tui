@@ -26,7 +26,7 @@ TODO windows as lists of cells
   implement scrolling and overflow on the level of lines
 MAYBE generic tui function - takes layout and component specifications
 TODO put the keybindings documentation and their implementation nearer together
-TODO keybinding to toggle slow drawing mode
+[done] keybinding to toggle slow drawing mode
 [canceled] mark the origin of each event dap/app
 [done] shared write buffer so there is only one flush per interface update
 TODO source window: add line numbers
@@ -37,3 +37,4 @@ TODO commands
   4. add breakpoint (line number as input)
   5. evaluate (code as input)
   6. watch expression (expression as input)
+TODO fix writing glitches

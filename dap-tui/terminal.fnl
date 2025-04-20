@@ -82,36 +82,6 @@
     (jq-output:close)
     formatted))
 
-(fn write [data]
-  (local debug false)
-  (when data
-    (local delay 0.05)
-    (local batch-size 100)
-    (local data-size (length data))
-    (var ptr 1)
-    (var tries nil)
-    (if debug
-      (do
-        (t.cursor.visible.set true)
-        (for [ptr 0 (length data)]
-          (io.stdout:write (string.sub data ptr ptr))
-          (io.stdout:flush)
-          (t._bsleep 0.001)))
-
-      (while (<= ptr data-size)
-        (let [batch (string.sub data ptr (- (+ ptr batch-size) 1))
-              (ok? error-message error-code) (io.stdout:write batch)]
-          (if
-            ok?
-            (do
-              (set ptr (+ ptr batch-size))
-              (set tries nil))
-
-            (or (= 11 error-code) (= 35 error-code))
-            (do
-              (set tries (+ 1 (or tries 0)))
-              (t._bsleep (* tries delay)))))))
-    (io.stdout:flush)))
 
 (fn make-writer []
   (local writer {:chunks []})
@@ -122,12 +92,38 @@
   (fn writer.write [chunk]
     (table.insert writer.chunks chunk))
 
-  (fn writer.flush []
+  (fn writer.flush [slow?]
     (when (< 0 (length writer.chunks))
-      (let [batch (stringx.join "" writer.chunks)]
-        (write batch))
-      (writer.reset)))
+      (let [data (stringx.join "" writer.chunks)]
+        (if slow?
+          (do
+            (t.cursor.visible.set true)
+            (for [ptr 0 (length data)]
+              (io.stdout:write (string.sub data ptr ptr))
+              (io.stdout:flush)
+              (t._bsleep 0.001))
+            (t.cursor.visible.set false))
+          (do
+            (local delay-on-error--seconds 0.05)
+            (local batch-size 100)
+            (local total-size (length data))
+            (var ptr 1)
+            (var tries nil)
+            (while (<= ptr total-size)
+              (let [batch (string.sub data ptr (- (+ ptr batch-size) 1))
+                    (ok? error-message error-code) (io.stdout:write batch)]
+                (if
+                  ok?
+                  (do
+                    (set ptr (+ ptr batch-size))
+                    (set tries nil))
 
+                  (or (= 11 error-code) (= 35 error-code))
+                  (do
+                    (set tries (+ 1 (or tries 0)))
+                    (t._bsleep (* tries delay-on-error--seconds))))))))
+        (io.stdout:flush))
+      (writer.reset)))
   writer)
 
 (fn round [value]
@@ -213,6 +209,7 @@
 
 (fn make-tui []
   (local tui {:writer (make-writer)})
+  (local slow-write? (->cell false))
 
   (local events (->cell []))
   (local screen-size (->cell (usable-termsize)))
@@ -392,10 +389,11 @@
                                                "1/2/...: Change focused window"]
                                               (stringx.join "\n")))})
      (make-window :info "Info"
-                  {:content-cell (->cell [events -cell-count]
+                  {:content-cell (->cell [events -cell-count slow-write?]
                                          (when (and events -cell-count)
                                            (->> [(.. "Events: " (tostring (length events)))
-                                                 (.. "Cells:  " (tostring -cell-count))]
+                                                 (.. "Cells:  " (tostring -cell-count))
+                                                 (.. "Slow write enabled: " (tostring slow-write?))]
                                                 (stringx.join "\n"))))})
      (make-window :variables "Variables"
                   {:content-cell (->cell [active-frame stack-trace]
@@ -445,7 +443,7 @@
     (t.clear.screen)
 
     (active-screen.set :events)
-    (tui.writer.flush))
+    (tui.writer.flush (slow-write?.get)))
 
   (fn tui.shutdown []
     (t.shutdown))
@@ -454,6 +452,8 @@
     (tui.writer.reset)
     (case command
       :set-screensize (screen-size.set params)
+
+      :toggle-slow-write (slow-write?.set (not (slow-write?.get)))
 
       :select-screen (do
                        (active-screen.set params.screen-id)
@@ -493,7 +493,7 @@
                                             (active-frame-no.set (- current-active-frame-no 1)))
                                       :down (when (< current-active-frame-no frame-count)
                                               (active-frame-no.set (+ current-active-frame-no 1)))))))
-    (tui.writer.flush))
+    (tui.writer.flush (slow-write?.get)))
 
   tui)
 

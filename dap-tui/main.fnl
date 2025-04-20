@@ -126,6 +126,7 @@
           :k (tui.handle-command :move-cursor {:direction :up})
           :l (tui.handle-command :move-cursor {:direction :right})
 
+          :S (tui.handle-command :toggle-slow-write)
           :q (set should-run? false)
 
           _ (tui.handle-command
