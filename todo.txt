@@ -1,32 +1,16 @@
-[canceled] helper context managers for terminal sequence building (fennel macros?)
-  (with-text-attrs {...}
-    ; push stack at the start
-    ...
-    ) ; pop stack at the end
-  (with-output-buffer
-    ; create a buffer, push sequences into the buffer
-    ...
-    ) ; flush the buffer at the end
 MAYBE distribute with homebrew?
 TODO verify and report bug in debugpy (connect argument being required in attach call)
 TODO unify terminology `active`, `selected`, `focused`
 TODO content scrolling; horizontal and vertical
 TODO fix rounding issue in splits
-[canceled] setup defaults for scroll offsets instead of copying them around in each component
 TODO get rid of the event.content.content crap
-[done] bottom toolbar with basic debug info (eg. cell count)
-[canceled] sanitize cell creation using macros (gensym tricks?)
 TODO automatic cell unhooking
   1. register all the dependencies of a cell
   2. register all child cells (cells defined within the expr of the parent cell)
   3. when the value changes unhook all child cells from their dependencies
 TODO windows as lists of cells
-  [done] each line represents a cell
-  [done] when drawing, instead of writing text to stdout, set text in a specific line cell
   implement scrolling and overflow on the level of lines
-[canceled] generic tui function - takes layout and component specifications
 TODO put the keybindings documentation and their implementation nearer together
-[done] source window: add line numbers
 TODO commands
   1. next
   2. step in
