@@ -104,18 +104,31 @@
           (if
             ok?
             (do
-              (io.stdout:flush)
               (set ptr (+ ptr batch-size))
               (set tries nil))
 
             (or (= 11 error-code) (= 35 error-code))
             (do
               (set tries (+ 1 (or tries 0)))
-              (io.stdout:flush)
-              (os.exit 1)
-              (t._bsleep (* tries delay)))
+              (t._bsleep (* tries delay)))))))
+    (io.stdout:flush)))
 
-            (values ok? error-message error-code)))))))
+(fn make-writer []
+  (local writer {:chunks []})
+
+  (fn writer.reset []
+    (set (. writer :chunks) []))
+
+  (fn writer.write [chunk]
+    (table.insert writer.chunks chunk))
+
+  (fn writer.flush []
+    (when (< 0 (length writer.chunks))
+      (let [batch (stringx.join "" writer.chunks)]
+        (write batch))
+      (writer.reset)))
+
+  writer)
 
 (fn round [value]
   (let [(integral-part fractional-part) (math.modf value)]
@@ -199,6 +212,8 @@
        inspect))
 
 (fn make-tui []
+  (local tui {:writer (make-writer)})
+
   (local events (->cell []))
   (local screen-size (->cell (usable-termsize)))
   (local active-screen (->cell nil))
@@ -283,7 +298,7 @@
 
   (fn draw-border [plan title focused?]
     (when plan
-      (write
+      (tui.writer.write
         (.. (t.cursor.position.set_seq plan.location.row plan.location.column)
             (if focused? (t.text.attr_seq {:fg "yellow"}) (t.text.attr_seq {}))
             (t.draw.box_seq plan.size.height plan.size.width my-box-fmt false title)))))
@@ -345,9 +360,10 @@
                                                (let [full-line (pad-line content-line line-plan)
                                                      position-seq (t.cursor.position.set_seq line-plan.location.row
                                                                                              line-plan.location.column)]
-                                                 (write (.. (t.text.attr_seq {})
-                                                            position-seq
-                                                            full-line)))))]
+                                                 (tui.writer.write
+                                                   (.. (t.text.attr_seq {})
+                                                       position-seq
+                                                       full-line)))))]
                       (table.insert printers printer)))))
       window))
 
@@ -422,21 +438,20 @@
   (local windows (collect [_ window (ipairs windows-)]
                    (values window.id window)))
 
-
-  (local tui {})
-
   (fn tui.initialize []
     (t.initialize {:displaybackup true :filehandle io.stdout})
     (t.cursor.visible.set false)
     (set tui.initialized true)
     (t.clear.screen)
 
-    (active-screen.set :events))
+    (active-screen.set :events)
+    (tui.writer.flush))
 
   (fn tui.shutdown []
     (t.shutdown))
 
   (fn tui.handle-command [command params]
+    (tui.writer.reset)
     (case command
       :set-screensize (screen-size.set params)
 
@@ -477,7 +492,8 @@
                                       :up (when (< 1 current-active-frame-no)
                                             (active-frame-no.set (- current-active-frame-no 1)))
                                       :down (when (< current-active-frame-no frame-count)
-                                              (active-frame-no.set (+ current-active-frame-no 1))))))))
+                                              (active-frame-no.set (+ current-active-frame-no 1)))))))
+    (tui.writer.flush))
 
   tui)
 
