@@ -1,4 +1,4 @@
-MAYBE helper context managers for terminal sequence building (fennel macros?)
+[canceled] helper context managers for terminal sequence building (fennel macros?)
   (with-text-attrs {...}
     ; push stack at the start
     ...
@@ -26,7 +26,7 @@ TODO windows as lists of cells
   implement scrolling and overflow on the level of lines
 MAYBE generic tui function - takes layout and component specifications
 TODO put the keybindings documentation and their implementation nearer together
-TODO source window: add line numbers
+[done] source window: add line numbers
 TODO commands
   1. next
   2. step in
@@ -35,3 +35,6 @@ TODO commands
   5. evaluate (code as input)
   6. watch expression (expression as input)
 TODO fix writing glitches
+  border chars don't get cleared out
+  cells count writes into debug screen on first load
+  borders don't draw correctly on last row and last column of the window

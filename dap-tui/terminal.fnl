@@ -304,6 +304,12 @@
     (.. (string.sub content 1 line-plan.size.width)
         (string.rep " " (- line-plan.size.width (length content)))))
 
+  (fn left-pad [value total-length pad-char]
+    (let [pad-char (or pad-char " ")
+          value-str (tostring value)
+          pad-size (- total-length (length value-str))]
+      (.. (string.rep pad-char pad-size) value-str)))
+
   (fn make-window [id title params]
     (let [plan (->cell [drawing-plan]
                        (. drawing-plan id))
@@ -423,10 +429,14 @@
                                            (accumulate [source ""
                                                         _ event (ipairs events)]
                                              (if (= :sources-loaded event.type)
-                                               (let [lines (. event.content active-frame.source.path)]
+                                               (let [lines (. event.content active-frame.source.path)
+                                                     max-number-length (-> lines length tostring length)]
                                                  (->> (icollect [line-no line (ipairs lines)]
                                                         (let [prefix (if (= line-no active-frame.line) ">> " "   ")]
-                                                          (.. prefix line)))
+                                                          (.. prefix
+                                                              (left-pad line-no (+ 1 max-number-length))
+                                                              " "
+                                                              line)))
                                                       (stringx.join "\n")))
                                                source))))})
      (make-window :breakpoint-details "Breakpoint Details"
