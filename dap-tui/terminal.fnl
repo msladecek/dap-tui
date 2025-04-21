@@ -39,11 +39,8 @@
   (local cell (make-cell nil))
   (-cell-count.set (+ 1 (-cell-count.get)))
 
-  (fn constructor []
-    (expr))
-
   (fn callback []
-    (cell.set (constructor)))
+    (cell.set (expr)))
 
   (local previous-callback-binding -callback-binding)
   (set -callback-binding callback)
@@ -81,7 +78,6 @@
         formatted (jq-output:read "a")]
     (jq-output:close)
     formatted))
-
 
 (fn make-writer []
   (local writer {:chunks []})
