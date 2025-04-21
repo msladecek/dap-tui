@@ -12,7 +12,7 @@ TODO windows as lists of cells
   implement scrolling and overflow on the level of lines
 TODO put the keybindings documentation and their implementation nearer together
 TODO commands
-  1. next
+  [done] 1. next
   2. step in
   3. step out
   4. add breakpoint (line number as input)
@@ -22,3 +22,4 @@ TODO fix writing glitches
   border chars don't get cleared out
   cells count writes into debug screen on first load
   borders don't draw correctly on last row and last column of the window
+TODO support multiple threads

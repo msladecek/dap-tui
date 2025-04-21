@@ -194,16 +194,14 @@
   drawing-plan)
 
 (fn events->breakpoint-details [events]
-  (->> (accumulate [breakpoint-details {}
+  (->> (accumulate [breakpoint-details nil
                     _ event (pairs events)]
          (let [content (?. event :content :content)]
-           (case [(?. content :type)
-                  (?. content :event)]
+           (case [(?. content :type) (?. content :event)]
              [:event :stopped]
-             (do
-               (tset breakpoint-details :reason content.body.reason)
-               (tset breakpoint-details :description content.body.description)
-               (tset breakpoint-details :text content.body.text)))
+             {:reason content.body.reason
+              :description content.body.description
+              :text content.body.text})
            breakpoint-details))
        inspect))
 
@@ -215,6 +213,7 @@
   (local screen-size (->cell (usable-termsize)))
   (local active-screen (->cell nil))
   (local active-window (->cell nil))
+  (->cell [active-window] (set (. tui :active-window) active-window))
   (local active-event-no (->cell nil))
   (local active-event (->cell [events active-event-no]
                               (when (and events active-event-no)
@@ -229,8 +228,10 @@
                                  (let [content (?. event :content :content)]
                                    (case [(?. content :type) (?. content :command)]
                                      [:response :stackTrace]
-                                     (each [_ frame (ipairs content.body.stackFrames)]
-                                       (table.insert frames frame))
+                                     (do
+                                       (tablex.clear frames)
+                                       (each [_ frame (ipairs content.body.stackFrames)]
+                                         (table.insert frames frame)))
 
                                      [:request :scopes]
                                      (set (. frames-by-request-seq content.seq) content.arguments.frameId)
@@ -479,14 +480,21 @@
                            selected-window-id)))
 
       :add-event (let [new-events (tablex.deepcopy (events.get))]
-                       (table.insert new-events params)
-                       (events.set new-events)
+                   (table.insert new-events params)
+                   (events.set new-events)
+
                    (when (= 1 (length new-events))
                      (active-event-no.set 1))
-                   (when (and (not (active-frame-no.get))
-                              (= :response (?. params :content :content :type))
+
+                   (when (and (= :response (?. params :content :content :type))
                               (= :stackTrace (?. params :content :content :command)))
-                     (active-frame-no.set 1)))
+                     (let [trace-size (length params.content.content.body.stackFrames)]
+                       (if
+                         (not (active-frame-no.get))
+                         (active-frame-no.set 1)
+
+                         (< trace-size (active-frame-no.get))
+                         (active-frame-no.set trace-size)))))
 
       :move-cursor (case (active-window.get)
                      :event-list (when-let [current-active-event-no (active-event-no.get)

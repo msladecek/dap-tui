@@ -28,6 +28,8 @@
 
   (local handler {})
 
+  (var last-thread-id nil)
+
   (fn handler.handle-message [message]
     (tui.handle-command
       :add-event
@@ -39,10 +41,16 @@
       (do
         (request :attach {:connect {}})
         (request :setExceptionBreakpoints {:filters ["uncaught"]})
+        (request :setFunctionBreakpoints {:breakpoints [{:name "do_something"}]})
         (request :configurationDone {}))
 
       [:event :stopped]
-      (request :stackTrace {:threadId message.content.body.threadId})
+      (do
+        (set last-thread-id message.content.body.threadId)
+        (request :stackTrace {:threadId message.content.body.threadId}))
+
+      [:event :terminated]
+      nil ;; TODO
 
       [:response :stackTrace]
       (let [sources {}]
@@ -68,7 +76,11 @@
       (request :initialize {:clientName "dap-tui" :adapterID "debugpy"})
 
       :continue
-      (request :continue {})))
+      (request :continue {})
+
+      :next
+      (request :next {:threadId last-thread-id})
+      ))
 
   handler)
 
@@ -118,15 +130,20 @@
           :E (tui.handle-command :select-screen {:screen-id :events})
           :D (tui.handle-command :select-screen {:screen-id :debug})
 
-          :r (handler.handle-command :run)
-          :c (handler.handle-command :continue)
-
           :h (tui.handle-command :move-cursor {:direction :left})
           :j (tui.handle-command :move-cursor {:direction :down})
           :k (tui.handle-command :move-cursor {:direction :up})
           :l (tui.handle-command :move-cursor {:direction :right})
 
-          :S (tui.handle-command :toggle-slow-write)
+
+          :r (handler.handle-command :run)
+          :c (handler.handle-command :continue)
+          :n (handler.handle-command :next)
+          :s (case tui.active-screen
+               :debug (handler.handle-command :step-in)
+               :events (tui.handle-command :toggle-slow-write))
+          :S (handler.handle-command :step-out)
+
           :q (set should-run? false)
 
           _ (tui.handle-command
