@@ -139,11 +139,10 @@
           :r (handler.handle-command :run)
           :c (handler.handle-command :continue)
           :n (handler.handle-command :next)
-          :s (case tui.active-screen
-               :debug (handler.handle-command :step-in)
-               :events (tui.handle-command :toggle-slow-write))
+          :s (handler.handle-command :step-in)
           :S (handler.handle-command :step-out)
 
+          :- (tui.handle-command :toggle-slow-write)
           :q (set should-run? false)
 
           _ (tui.handle-command
