@@ -466,7 +466,7 @@
                        (active-screen.set params.screen-id)
                        (active-window.set nil))
 
-      :select-window (accumulate [selected-window-id nil
+      :select-window (accumulate [selected-window-id (active-window.get)
                                   window-id window (pairs windows)]
                        (active-window.set
                          (if (and window.plan
@@ -507,6 +507,7 @@
                                             (active-frame-no.set (- current-active-frame-no 1)))
                                       :down (when (< current-active-frame-no frame-count)
                                               (active-frame-no.set (+ current-active-frame-no 1)))))))
+
     (tui.writer.flush (slow-write?.get)))
 
   tui)
