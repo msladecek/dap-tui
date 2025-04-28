@@ -1,5 +1,4 @@
 MAYBE distribute with homebrew?
-TODO verify and report bug in debugpy (connect argument being required in attach call)
 TODO unify terminology `active`, `selected`, `focused`
 TODO content scrolling; horizontal and vertical
 TODO fix rounding issue in splits
@@ -23,3 +22,6 @@ TODO fix writing glitches
   cells count writes into debug screen on first load
   borders don't draw correctly on last row and last column of the window
 TODO support multiple threads
+TODO command input window
+  input breakpoint line number
+  only shows up when input is needed
