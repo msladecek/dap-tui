@@ -4,16 +4,17 @@
 (local t (require "terminal"))
 (local tablex (require "pl.tablex"))
 
-(var -callback-binding nil)
-
 (macro when-let [[s v & binds] & body]
   `(let [,s ,v]
      (when ,s
        (let [,(unpack binds)]
          ,(unpack body)))))
 
+(var -callback-binding nil)
+
 (fn make-cell [initial-value]
-  (local cell {:value initial-value :callbacks {}})
+  (local cell {:value initial-value
+               :callbacks {}})
 
   (fn cell.add-callback [callback]
     (when callback
@@ -24,44 +25,49 @@
       (cell.add-callback -callback-binding))
     cell.value)
 
+  (fn cell.broadcast [_ old-value]
+    (each [callback _ (pairs cell.callbacks)]
+      (callback cell cell.value old-value)))
+
   (fn cell.set [new-value]
     (when (not (tablex.deepcompare new-value cell.value))
-      (set cell.value new-value)
-      (each [callback _ (pairs cell.callbacks)]
-        (callback new-value)))
+      (let [old-value cell.value]
+        (set cell.value new-value)
+        (cell.broadcast new-value old-value)))
     new-value)
 
   cell)
 
-(local -cell-count (make-cell 1))
-
 (fn make-computed-cell [expr]
   (local cell (make-cell nil))
-  (-cell-count.set (+ 1 (-cell-count.get)))
 
-  (fn callback []
-    (cell.set (expr)))
+  (fn callback [initiator initiator-new-value initiator-old-value]
+    (cell.set (expr initiator initiator-new-value initiator-old-value)))
 
   (local previous-callback-binding -callback-binding)
   (set -callback-binding callback)
-  (callback)
+  (callback cell)
   (set -callback-binding previous-callback-binding)
-
   cell)
 
 (macro ->cell [& args]
   (case args
-    (where [deps & exprs] (and (< 0 (length exprs))
-                               (sequence? deps)))
+    (where [dep-syms & exprs] (and (< 0 (length exprs))
+                                   (sequence? dep-syms)))
     `(make-computed-cell
-       (fn []
-          (let ,(accumulate [binds []
-                             _ dep (ipairs deps)]
-                  (do
-                    (table.insert binds dep)
-                    (table.insert binds `((. ,dep :get)))
-                    binds))
-            ,(unpack exprs))))
+       (fn [initiator-cell# ,(sym :initiator-new-value) ,(sym :initiator-old-value)]
+         (let ,(accumulate [binds [(sym :dep-names) (icollect [_# sym# (ipairs dep-syms)]
+                                                      (tostring sym#))
+                                   (sym :initiator) `(let [dep-to-name#
+                                                           (collect [_# [dep-name# dep#] (ipairs (tablex.zip dep-names ,dep-syms))]
+                                                             (values dep# dep-name#))]
+                                        (. dep-to-name# initiator-cell#))]
+                            _ dep (ipairs dep-syms)]
+                 (do
+                   (table.insert binds dep)
+                   (table.insert binds `((. ,dep :get)))
+                   binds))
+           ,(unpack exprs))))
 
     (where [& exprs] (< 0 (length exprs)))
     `(make-computed-cell (fn [] ,(unpack exprs)))
@@ -285,9 +291,9 @@
             (if focused? (t.text.attr_seq {:fg "yellow"}) (t.text.attr_seq {}))
             (t.draw.box_seq plan.size.height plan.size.width my-box-fmt false title)))))
 
-  (fn pad-line [content line-plan]
-    (.. (string.sub content 1 line-plan.size.width)
-        (string.rep " " (- line-plan.size.width (length content)))))
+  (fn pad-line [content width]
+    (.. (string.sub content 1 width)
+        (string.rep " " (- width (length content)))))
 
   (fn left-pad [value total-length pad-char]
     (let [pad-char (or pad-char " ")
@@ -315,44 +321,38 @@
           content-cell (or params.content-cell (->cell ""))
           content-cell-lines (->cell [content-cell]
                                      (stringx.splitlines (or content-cell "")))
-          content-lines []
-          line-plans []
-          printers []
+          window-content []
           window {: id
                   : title
                   : params
                   : plan
                   : border}]
 
-      (->cell (when-let [content-plan2 (content-plan.get)]
-                (let [content-cell-lines2 (content-cell-lines.get)]
-                  (for [line-no (+ 1 (length content-lines)) (math.max (length content-cell-lines2)
-                                                                       content-plan2.size.height)]
-                    (let [content-line (->cell [content-cell-lines]
-                                               (or (. content-cell-lines line-no) ""))]
-                      (table.insert content-lines content-line))))
+      (content-plan.add-callback
+        (fn [_ content-plan2]
+          (when content-plan2
+            (let [content-cell-lines2 (content-cell-lines.get)]
+              (for [line-no (+ 1 (length window-content)) content-plan2.size.height]
+                (let [plan (->cell [content-plan]
+                                   (when (and content-plan (<= line-no content-plan.size.height))
+                                     {:size {:height 1
+                                             :width content-plan.size.width}
+                                      :location {:row (- (+ line-no content-plan.location.row) 1)
+                                                 :column content-plan.location.column}}))
+                      content (->cell [content-cell-lines]
+                                      (or (. content-cell-lines line-no) ""))]
+                  (->cell [plan content]
+                          (when plan
+                            (tui.writer.write
+                              (.. (t.text.attr_seq {})
+                                  (t.cursor.position.set_seq plan.location.row plan.location.column)
+                                  (string.sub (case initiator
+                                                :plan (pad-line content plan.size.width)
+                                                :content (pad-line content (math.max (length content) (length initiator-old-value)))
+                                                _ (string.rep " " plan.size.width))
+                                              1 plan.size.width)))))
+                  (table.insert window-content {: plan : content})))))))
 
-                (for [line-no (+ 1 (length line-plans)) content-plan2.size.height]
-                  (let [plan (->cell [content-plan]
-                                     (when (and content-plan (<= line-no content-plan.size.height))
-                                       {:size {:height 1 :width content-plan.size.width}
-                                        :location {:row (- (+ line-no content-plan.location.row) 1)
-                                                   :column content-plan.location.column}}))]
-                    (table.insert line-plans plan)))
-
-                (for [line-no (+ 1 (length printers)) content-plan2.size.height]
-                  (when-let [content-line (. content-lines line-no)
-                             line-plan (. line-plans line-no)
-                             printer (->cell [line-plan content-line]
-                                             (when (and line-plan content-line)
-                                               (let [full-line (pad-line content-line line-plan)
-                                                     position-seq (t.cursor.position.set_seq line-plan.location.row
-                                                                                             line-plan.location.column)]
-                                                 (tui.writer.write
-                                                   (.. (t.text.attr_seq {})
-                                                       position-seq
-                                                       full-line)))))]
-                      (table.insert printers printer)))))
       window))
 
   (local windows-
@@ -380,10 +380,9 @@
                                                "1/2/...: Change focused window"]
                                               (stringx.join "\n")))})
      (make-window :info "Info"
-                  {:content-cell (->cell [events -cell-count slow-write?]
-                                         (when (and events -cell-count)
+                  {:content-cell (->cell [events slow-write?]
+                                         (when events
                                            (->> [(.. "Events: " (tostring (length events)))
-                                                 (.. "Cells:  " (tostring -cell-count))
                                                  (.. "Slow write enabled: " (tostring slow-write?))]
                                                 (stringx.join "\n"))))})
      (make-window :variables "Variables"
