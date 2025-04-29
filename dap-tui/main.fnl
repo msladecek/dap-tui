@@ -41,7 +41,8 @@
       (do
         (request :attach {:connect {}})
         (request :setExceptionBreakpoints {:filters ["uncaught"]})
-        (request :setFunctionBreakpoints {:breakpoints [{:name "do_something"}]})
+        (request :setFunctionBreakpoints {:breakpoints [{:name "do_something"}
+                                                        {:name "one"}]})
         (request :configurationDone {}))
 
       [:event :stopped]
@@ -80,7 +81,12 @@
 
       :next
       (request :next {:threadId last-thread-id})
-      ))
+
+      :step-in
+      (request :stepIn {:threadId last-thread-id})
+
+      :step-out
+      (request :stepOut {:threadId last-thread-id})))
 
   handler)
 
