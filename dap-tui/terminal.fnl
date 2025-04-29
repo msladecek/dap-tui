@@ -90,36 +90,24 @@
 
   (fn writer.flush [slow?]
     (when (< 0 (length writer.chunks))
+      (when slow?
+        (t.cursor.visible.set true))
+
       (let [data (stringx.join "" writer.chunks)]
         (if slow?
+          (for [ptr 1 (length data)]
+            (t.output.write (string.sub data ptr ptr))
+            (t.output.flush)
+            (t._bsleep 0.005))
           (do
-            (t.cursor.visible.set true)
-            (for [ptr 0 (length data)]
-              (io.stdout:write (string.sub data ptr ptr))
-              (io.stdout:flush)
-              (t._bsleep 0.001))
-            (t.cursor.visible.set false))
-          (do
-            (local delay-on-error--seconds 0.05)
-            (local batch-size 100)
-            (local total-size (length data))
-            (var ptr 1)
-            (var tries nil)
-            (while (<= ptr total-size)
-              (let [batch (string.sub data ptr (- (+ ptr batch-size) 1))
-                    (ok? error-message error-code) (io.stdout:write batch)]
-                (if
-                  ok?
-                  (do
-                    (set ptr (+ ptr batch-size))
-                    (set tries nil))
+            (t.output.write data)
+            (t.output.flush))))
 
-                  (or (= 11 error-code) (= 35 error-code))
-                  (do
-                    (set tries (+ 1 (or tries 0)))
-                    (t._bsleep (* tries delay-on-error--seconds))))))))
-        (io.stdout:flush))
+      (when slow?
+        (t.cursor.visible.set false))
+
       (writer.reset)))
+
   writer)
 
 (fn round [value]
