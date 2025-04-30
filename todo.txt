@@ -30,3 +30,7 @@ TODO control the order of cell callback execution (for aesthetics - printing top
   order callbacks first by component then by id when executing them
 TODO ->cell macro - reduce the amount of logic happening within the expr execution
 TODO ->cell macro - collect dep symbol names and values in a single loop
+TODO granular text comparison to minimize output writes
+  search from the left to find the first character that is different
+  search from the right to find the last character that is different
+  overwrite only the section between those two locations
