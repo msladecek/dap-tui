@@ -10,7 +10,7 @@
        (let [,(unpack binds)]
          ,(unpack body)))))
 
-(var -callback-binding nil)
+(var *callback-binding* nil)
 
 (fn make-cell [initial-value]
   (local cell {:value initial-value
@@ -21,8 +21,8 @@
       (set (. cell.callbacks callback) true)))
 
   (fn cell.get []
-    (when -callback-binding
-      (cell.add-callback -callback-binding))
+    (when *callback-binding*
+      (cell.add-callback *callback-binding*))
     cell.value)
 
   (fn cell.broadcast [_ old-value]
@@ -44,10 +44,10 @@
   (fn callback [initiator initiator-new-value initiator-old-value]
     (cell.set (expr initiator initiator-new-value initiator-old-value)))
 
-  (local previous-callback-binding -callback-binding)
-  (set -callback-binding callback)
+  (local previous-callback-binding *callback-binding*)
+  (set *callback-binding* callback)
   (callback cell)
-  (set -callback-binding previous-callback-binding)
+  (set *callback-binding* previous-callback-binding)
   cell)
 
 (macro ->cell [& args]
@@ -55,13 +55,13 @@
     (where [dep-syms & exprs] (and (< 0 (length exprs))
                                    (sequence? dep-syms)))
     `(make-computed-cell
-       (fn [initiator-cell# ,(sym :initiator-new-value) ,(sym :initiator-old-value)]
-         (let ,(accumulate [binds [(sym :dep-names) (icollect [_# sym# (ipairs dep-syms)]
-                                                      (tostring sym#))
-                                   (sym :initiator) `(let [dep-to-name#
-                                                           (collect [_# [dep-name# dep#] (ipairs (tablex.zip dep-names ,dep-syms))]
-                                                             (values dep# dep-name#))]
-                                        (. dep-to-name# initiator-cell#))]
+       (fn [initiator-cell# ,(sym :*initiator-new-value*) ,(sym :*initiator-old-value*)]
+         (let ,(accumulate [binds [`dep-names# (icollect [_# sym# (ipairs dep-syms)]
+                                                 (tostring sym#))
+                                   (sym :*initiator*) `(let [dep-to-name#
+                                                             (collect [_# [dep-name# dep#] (ipairs (tablex.zip dep-names# ,dep-syms))]
+                                                               (values dep# dep-name#))]
+                                                         (. dep-to-name# initiator-cell#))]
                             _ dep (ipairs dep-syms)]
                  (do
                    (table.insert binds dep)
@@ -346,9 +346,9 @@
                             (tui.writer.write
                               (.. (t.text.attr_seq {})
                                   (t.cursor.position.set_seq plan.location.row plan.location.column)
-                                  (string.sub (case initiator
+                                  (string.sub (case *initiator*
                                                 :plan (pad-line content plan.size.width)
-                                                :content (pad-line content (math.max (length content) (length initiator-old-value)))
+                                                :content (pad-line content (math.max (length content) (length *initiator-old-value*)))
                                                 _ (string.rep " " plan.size.width))
                                               1 plan.size.width)))))
                   (table.insert window-content {: plan : content})))))))
