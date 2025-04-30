@@ -345,11 +345,11 @@
                             (tui.writer.write
                               (.. (t.text.attr_seq {})
                                   (t.cursor.position.set_seq plan.location.row plan.location.column)
-                                  (string.sub (case *initiator*
-                                                :plan (pad-line content plan.size.width)
-                                                :content (pad-line content (math.max (length content) (length *initiator-old-value*)))
-                                                _ (string.rep " " plan.size.width))
-                                              1 plan.size.width)))))
+                                  (-> content
+                                      (pad-line (if (= :content *initiator*)
+                                                  (math.max (length content) (length *initiator-old-value*))
+                                                  plan.size.width))
+                                      (string.sub 1 plan.size.width))))))
                   (table.insert window-content {: plan : content})))))))
 
       window))
