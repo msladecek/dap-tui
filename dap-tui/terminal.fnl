@@ -201,8 +201,8 @@
   (local events (->cell []))
   (local screen-size (->cell (usable-termsize)))
   (local active-screen (->cell nil))
-  (local active-window (->cell nil))
-  (->cell [active-window] (set (. tui :active-window) active-window))
+  (local active-window-id (->cell nil))
+  (->cell [active-window-id] (set (. tui :active-window) active-window-id))
   (local active-event-no (->cell nil))
   (local active-event (->cell [events active-event-no]
                               (when (and events active-event-no)
@@ -308,8 +308,8 @@
           title (if window-key
                   (.. (tostring window-key) ": " title)
                   title)
-          focused? (->cell [active-window]
-                           (= id active-window))
+          focused? (->cell [active-window-id]
+                           (= id active-window-id))
           border-data (->cell [focused? plan]
                               {:focused? focused?
                                :plan plan})
@@ -321,15 +321,19 @@
           content-cell-lines (->cell [content-cell]
                                      (stringx.splitlines (or content-cell "")))
           window-content []
+          scroll-rows (->cell 0)
           window {: id
                   : title
                   : params
                   : plan
-                  : border}]
+                  : content-plan
+                  : border
+                  : scroll-rows}]
 
       (content-plan.add-callback
         (fn [_ content-plan2]
           (when content-plan2
+            (scroll-rows.set 0)
             (let [content-cell-lines2 (content-cell-lines.get)]
               (for [line-no (+ 1 (length window-content)) content-plan2.size.height]
                 (let [plan (->cell [content-plan]
@@ -338,8 +342,8 @@
                                              :width content-plan.size.width}
                                       :location {:row (- (+ line-no content-plan.location.row) 1)
                                                  :column content-plan.location.column}}))
-                      content (->cell [content-cell-lines]
-                                      (or (. content-cell-lines line-no) ""))]
+                      content (->cell [content-cell-lines scroll-rows]
+                                      (or (. content-cell-lines (+ line-no scroll-rows)) ""))]
                   (->cell [plan content]
                           (when plan
                             (tui.writer.write
@@ -352,6 +356,19 @@
                                       (string.sub 1 plan.size.width))))))
                   (table.insert window-content {: plan : content})))))))
 
+      (fn window.scroll-up []
+        (let [scroll (scroll-rows.get)]
+          (when (< 0 scroll)
+            (scroll-rows.set (- scroll 1)))))
+
+      (fn window.scroll-down []
+        (when-let [plan (content-plan.get)
+                   lines (content-cell-lines.get)
+                   scroll (scroll-rows.get)
+                   overflow (- (length lines) plan.size.height)]
+          (when (< scroll overflow)
+            (scroll-rows.set (+ scroll 1)))))
+
       window))
 
   (local windows-
@@ -359,9 +376,9 @@
                   {:key :1
                    :content-cell (->cell [events active-event-no]
                                          (->> (icollect [event-no event (ipairs events)]
-                                               (let [active? (= event-no active-event-no)
-                                                     prefix (if active? "> " "  ")]
-                                                 (.. prefix event.label)) )
+                                                (let [active? (= event-no active-event-no)
+                                                      prefix (if active? "> " "  ")]
+                                                  (.. prefix event.label)) )
                                               (stringx.join "\n")))})
      (make-window :event-details "Event Details"
                   {:key :2
@@ -429,6 +446,9 @@
   (local windows (collect [_ window (ipairs windows-)]
                    (values window.id window)))
 
+  (local active-window (->cell [active-window-id]
+                               (. windows active-window-id)))
+
   (fn tui.initialize []
     (t.initialize {:displaybackup true :filehandle io.stdout})
     (t.cursor.visible.set false)
@@ -450,11 +470,11 @@
 
       :select-screen (do
                        (active-screen.set params.screen-id)
-                       (active-window.set nil))
+                       (active-window-id.set nil))
 
-      :select-window (accumulate [selected-window-id (active-window.get)
+      :select-window (accumulate [selected-window-id (active-window-id.get)
                                   window-id window (pairs windows)]
-                       (active-window.set
+                       (active-window-id.set
                          (if (and window.plan
                                   (window.plan.get)
                                   (= (?. window :params :key) params.window-key))
@@ -478,21 +498,34 @@
                          (< trace-size (active-frame-no.get))
                          (active-frame-no.set trace-size)))))
 
-      :move-cursor (case (active-window.get)
-                     :event-list (when-let [current-active-event-no (active-event-no.get)
-                                            events-count (length (events.get))]
+      :move-cursor (case tui.active-window
+                     :event-list (when-let [event-no (active-event-no.get)
+                                            events-count (length (events.get))
+                                            window (active-window.get) 
+                                            content-plan (window.content-plan.get)
+                                            window-height content-plan.size.height]
                                    (case params.direction
-                                     :up (when (< 1 current-active-event-no)
-                                           (active-event-no.set (- current-active-event-no 1)))
-                                     :down (when (< current-active-event-no events-count)
-                                             (active-event-no.set (+ current-active-event-no 1)))))
+                                     :up (do
+                                           (when (< 1 event-no)
+                                             (active-event-no.set (- event-no 1)))
+                                           (when (= event-no (+ 1 (window.scroll-rows.get)))
+                                             (window.scroll-up)))
+                                     :down (do
+                                             (when (< event-no events-count)
+                                               (active-event-no.set (+ event-no 1)))
+                                             (when (>= event-no window-height)
+                                               (window.scroll-down)))))
                      :stack-trace (when-let [current-active-frame-no (active-frame-no.get)
                                              frame-count (length (stack-trace.get))]
                                     (case params.direction
                                       :up (when (< 1 current-active-frame-no)
                                             (active-frame-no.set (- current-active-frame-no 1)))
                                       :down (when (< current-active-frame-no frame-count)
-                                              (active-frame-no.set (+ current-active-frame-no 1)))))))
+                                              (active-frame-no.set (+ current-active-frame-no 1)))))
+                     _ (when-let [window (active-window.get)]
+                         (case params.direction
+                           :up (window.scroll-up)
+                           :down (window.scroll-down)))))
 
     (tui.writer.flush (slow-write?.get)))
 

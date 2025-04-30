@@ -1,19 +1,20 @@
 MAYBE distribute with homebrew?
 TODO unify terminology `active`, `selected`, `focused`
-TODO content scrolling; horizontal and vertical
+TODO content scrolling
+  horizontal
+  [done] vertical
 TODO fix rounding issue in splits
 TODO get rid of the event.content.content crap
 TODO automatic cell unhooking
   1. register all the dependencies of a cell
   2. register all child cells (cells defined within the expr of the parent cell)
   3. when the value changes unhook all child cells from their dependencies
-TODO windows as lists of cells
-  implement scrolling and overflow on the level of lines
+[done] windows as lists of cells implement scrolling and overflow on the level of lines
 TODO put the keybindings documentation and their implementation nearer together
 TODO commands
   [done] 1. next
-  2. step in
-  3. step out
+  [done] 2. step in
+  [done] 3. step out
   4. add breakpoint (line number as input)
   5. evaluate (code as input)
   6. watch expression (expression as input)
@@ -21,6 +22,7 @@ TODO fix writing glitches
   border chars don't get cleared out
   cells count writes into debug screen on first load
   borders don't draw correctly on last row and last column of the window
+  content doesn't get correctly redrawn out on resize
 TODO support multiple threads
 TODO command input window
   input breakpoint line number
@@ -34,3 +36,4 @@ TODO granular text comparison to minimize output writes
   search from the left to find the first character that is different
   search from the right to find the last character that is different
   overwrite only the section between those two locations
+TODO indicate in each window whenever scrolling is possible
