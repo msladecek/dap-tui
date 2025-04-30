@@ -54,20 +54,19 @@
   (case args
     (where [dep-syms & exprs] (and (< 0 (length exprs))
                                    (sequence? dep-syms)))
-    `(make-computed-cell
-       (fn [initiator-cell# ,(sym :*initiator-new-value*) ,(sym :*initiator-old-value*)]
-         (let ,(accumulate [binds [`dep-names# (icollect [_# sym# (ipairs dep-syms)]
-                                                 (tostring sym#))
-                                   (sym :*initiator*) `(let [dep-to-name#
-                                                             (collect [_# [dep-name# dep#] (ipairs (tablex.zip dep-names# ,dep-syms))]
-                                                               (values dep# dep-name#))]
-                                                         (. dep-to-name# initiator-cell#))]
-                            _ dep (ipairs dep-syms)]
-                 (do
-                   (table.insert binds dep)
-                   (table.insert binds `((. ,dep :get)))
-                   binds))
-           ,(unpack exprs))))
+    (let [dep->name# (collect [_# dep# (ipairs dep-syms)]
+                       (values dep# (tostring dep#)))
+          binds# (accumulate [binds# []
+                              _# dep# (ipairs dep-syms)]
+                   (do
+                     (table.insert binds# dep#)
+                     (table.insert binds# `((. ,dep# :get)))
+                     binds#))]
+      `(make-computed-cell
+         (fn [initiator-cell# ,(sym :*initiator-new-value*) ,(sym :*initiator-old-value*)]
+            (let [,(sym :*initiator*) (. ,dep->name# initiator-cell#)]
+              (let ,binds#
+                ,(unpack exprs))))))
 
     (where [& exprs] (< 0 (length exprs)))
     `(make-computed-cell (fn [] ,(unpack exprs)))
