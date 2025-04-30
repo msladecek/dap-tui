@@ -4,7 +4,7 @@ A basic terminal client for the [Debug Adapter Protocol](https://microsoft.githu
 
 ## Status
 
-Unstable. Work in progress.
+Buggy. Unstable. Work in progress.
 
 ## Development
 
