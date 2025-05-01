@@ -121,6 +121,37 @@
       integral-part
       (+ 1 integral-part))))
 
+(fn pad-line [content width]
+  (.. (string.sub content 1 width)
+      (string.rep " " (- width (length content)))))
+
+(fn left-pad [value total-length pad-char]
+  (let [pad-char (or pad-char " ")
+        value-str (tostring value)
+        pad-size (- total-length (length value-str))]
+    (.. (string.rep pad-char pad-size) value-str)))
+
+(fn different-section [new old]
+  (let [max-length (math.max (length new) (length old))
+        new-str (pad-line new max-length)
+        old-str (pad-line old max-length)]
+    (var first-different-loc 1)
+    (var last-different-loc max-length)
+
+    (for [loc max-length 1 -1]
+      (let [new-char (string.sub new-str loc loc)
+            old-char (string.sub old-str loc loc)]
+        (when (not= new-char old-char)
+          (set first-different-loc loc))))
+
+    (for [loc 1 max-length]
+      (let [new-char (string.sub new-str loc loc)
+            old-char (string.sub old-str loc loc)]
+        (when (not= new-char old-char)
+          (set last-different-loc loc))))
+
+    (values first-different-loc last-different-loc)))
+
 (fn usable-termsize []
   ;; When drawing a box all the way to the edge it glitches out
   (let [(height width) (sys.termsize)]
@@ -290,16 +321,6 @@
             (if focused? (t.text.attr_seq {:fg "yellow"}) (t.text.attr_seq {}))
             (t.draw.box_seq plan.size.height plan.size.width my-box-fmt false title)))))
 
-  (fn pad-line [content width]
-    (.. (string.sub content 1 width)
-        (string.rep " " (- width (length content)))))
-
-  (fn left-pad [value total-length pad-char]
-    (let [pad-char (or pad-char " ")
-          value-str (tostring value)
-          pad-size (- total-length (length value-str))]
-      (.. (string.rep pad-char pad-size) value-str)))
-
   (fn make-window [id title params]
     (let [plan (->cell [drawing-plan]
                        (. drawing-plan id))
@@ -352,13 +373,16 @@
                   (->cell [plan content]
                           (when plan
                             (tui.writer.write
-                              (.. (t.text.attr_seq {})
-                                  (t.cursor.position.set_seq plan.location.row plan.location.column)
-                                  (-> content
-                                      (pad-line (if (= :content *initiator*)
-                                                  (math.max (length content) (length *initiator-old-value*))
-                                                  plan.size.width))
-                                      (string.sub 1 plan.size.width))))))
+                              (if (= :content *initiator*)
+                                (let [(start end) (different-section content *initiator-old-value*)
+                                      max-width (math.max (length content) (length *initiator-old-value*))]
+                                  (.. (t.text.attr_seq {})
+                                      (t.cursor.position.set_seq plan.location.row (- (+ plan.location.column start) 1))
+                                      (-> (pad-line content max-width)
+                                          (string.sub start (math.min end plan.size.width)))))
+                                (.. (t.text.attr_seq {})
+                                    (t.cursor.position.set_seq plan.location.row plan.location.column)
+                                    (pad-line content plan.size.width))))))
                   (table.insert window-content {: plan : content})))))))
 
       (fn window.scroll-up []

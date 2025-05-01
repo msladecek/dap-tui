@@ -23,7 +23,7 @@ TODO command input window
 TODO control the order of cell callback execution (for aesthetics - printing top to bottom)
   create a macro (with-cell-context [<component> <id> ...]) and include context in callback set
   order callbacks first by component then by id when executing them
-TODO granular text comparison to minimize output writes
+[done] granular text comparison to minimize output writes
   search from the left to find the first character that is different
   search from the right to find the last character that is different
   overwrite only the section between those two locations
