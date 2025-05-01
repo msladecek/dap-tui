@@ -37,4 +37,4 @@ TODO granular text comparison to minimize output writes
   search from the right to find the last character that is different
   overwrite only the section between those two locations
 TODO indicate in each window whenever scrolling is possible
-TODO vim-style keybindings to scroll all the way up and all the way down gg/G
+[done] vim-style keybindings to scroll all the way up and all the way down gg/G

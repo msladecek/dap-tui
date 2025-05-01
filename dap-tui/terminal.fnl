@@ -389,6 +389,16 @@
           (when (< scroll-horizontal overflow)
             (scroll.horizontal.set (+ scroll-horizontal 1)))))
 
+      (fn window.scroll-top []
+        (scroll.vertical.set 0))
+
+      (fn window.scroll-bottom []
+        (when-let [plan (content-plan.get)
+                   lines (content-cell-lines.get)
+                   overflow (- (length lines) plan.size.height)]
+          (when (< 0 overflow)
+            (scroll.vertical.set overflow))))
+
       window))
 
   (local windows-
@@ -412,6 +422,8 @@
                   {:content-cell (->cell (->> ["q: quit"
                                                "r: run"
                                                "c: continue"
+                                               "h/j/k/l: move cursor / scroll"
+                                               "gg/G: jump to top / jump to bottom"
                                                "E/D: events view / debugger view"
                                                "1/2/...: Change focused window"]
                                               (stringx.join "\n")))})
@@ -522,7 +534,9 @@
                      (when-let [window (active-window.get)]
                        (case params.direction
                          :left (window.scroll-left)
-                         :right (window.scroll-right)))
+                         :right (window.scroll-right)
+                         :top (window.scroll-top)
+                         :bottom (window.scroll-bottom)))
 
                      (case tui.active-window
                        :event-list (when-let [event-no (active-event-no.get)
@@ -531,6 +545,8 @@
                                               content-plan (window.content-plan.get)
                                               window-height content-plan.size.height]
                                      (case params.direction
+                                       :top (active-event-no.set 1)
+                                       :bottom (active-event-no.set events-count)
                                        :up (do
                                              (when (< 1 event-no)
                                                (active-event-no.set (- event-no 1)))
@@ -544,6 +560,8 @@
                        :stack-trace (when-let [current-active-frame-no (active-frame-no.get)
                                                frame-count (length (stack-trace.get))]
                                       (case params.direction
+                                        :top (active-frame-no.set 1)
+                                        :bottom (active-frame-no.set frame-count)
                                         :up (when (< 1 current-active-frame-no)
                                               (active-frame-no.set (- current-active-frame-no 1)))
                                         :down (when (< current-active-frame-no frame-count)

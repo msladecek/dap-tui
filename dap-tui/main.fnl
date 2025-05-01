@@ -127,36 +127,43 @@
 
   (copas.addthread
     (fn []
+      (var command "")
       (while should-run?
-        (local (char typ sequence) (t.input.readansi math.huge copas.pause))
-        (case char
-          :1 (tui.handle-command :select-window {:window-key :1})
-          :2 (tui.handle-command :select-window {:window-key :2})
+        (let [(char typ sequence) (t.input.readansi math.huge copas.pause)
+              char-repr (inspect char)]
 
-          :E (tui.handle-command :select-screen {:screen-id :events})
-          :D (tui.handle-command :select-screen {:screen-id :debug})
+          (if (= "\27" char)
+            (set command "")
+            (set command (.. command char)))
 
-          :h (tui.handle-command :move-cursor {:direction :left})
-          :j (tui.handle-command :move-cursor {:direction :down})
-          :k (tui.handle-command :move-cursor {:direction :up})
-          :l (tui.handle-command :move-cursor {:direction :right})
+          (var matched? true)
+          (case command
+            :1 (tui.handle-command :select-window {:window-key :1})
+            :2 (tui.handle-command :select-window {:window-key :2})
 
+            :E (tui.handle-command :select-screen {:screen-id :events})
+            :D (tui.handle-command :select-screen {:screen-id :debug})
 
-          :r (handler.handle-command :run)
-          :c (handler.handle-command :continue)
-          :n (handler.handle-command :next)
-          :s (handler.handle-command :step-in)
-          :S (handler.handle-command :step-out)
+            :h (tui.handle-command :move-cursor {:direction :left})
+            :j (tui.handle-command :move-cursor {:direction :down})
+            :k (tui.handle-command :move-cursor {:direction :up})
+            :l (tui.handle-command :move-cursor {:direction :right})
+            :gg (tui.handle-command :move-cursor {:direction :top})
+            :G (tui.handle-command :move-cursor {:direction :bottom})
 
-          :- (tui.handle-command :toggle-slow-write)
-          :q (set should-run? false)
+            :r (handler.handle-command :run)
+            :c (handler.handle-command :continue)
+            :n (handler.handle-command :next)
+            :s (handler.handle-command :step-in)
+            :S (handler.handle-command :step-out)
 
-          _ (tui.handle-command
-              :add-event
-              {:label (.. "unhandled key: " (inspect char))
-               :content {:char char
-                         :type typ
-                         :sequence sequence}})))))
+            :- (tui.handle-command :toggle-slow-write)
+            :q (set should-run? false)
+
+            _ (set matched? false))
+
+          (when matched?
+            (set command ""))))))
 
   (while should-run?
     (set copas.running true)
