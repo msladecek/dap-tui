@@ -1,23 +1,16 @@
 MAYBE distribute with homebrew?
 TODO unify terminology `active`, `selected`, `focused`
-[done] content scrolling
-  [done] horizontal
-  [done] vertical
 TODO fix rounding issue in splits
 TODO get rid of the event.content.content crap
 TODO automatic cell unhooking
   1. register all the dependencies of a cell
   2. register all child cells (cells defined within the expr of the parent cell)
   3. when the value changes unhook all child cells from their dependencies
-[done] windows as lists of cells implement scrolling and overflow on the level of lines
 TODO put the keybindings documentation and their implementation nearer together
 TODO commands
-  [done] 1. next
-  [done] 2. step in
-  [done] 3. step out
-  4. add breakpoint (line number as input)
-  5. evaluate (code as input)
-  6. watch expression (expression as input)
+  add breakpoint (line number as input)
+  evaluate (code as input)
+  watch expression (expression as input)
 TODO fix writing glitches
   border chars don't get cleared out
   cells count writes into debug screen on first load
@@ -30,11 +23,8 @@ TODO command input window
 TODO control the order of cell callback execution (for aesthetics - printing top to bottom)
   create a macro (with-cell-context [<component> <id> ...]) and include context in callback set
   order callbacks first by component then by id when executing them
-[done] ->cell macro - reduce the amount of logic happening within the expr execution
-[done] ->cell macro - collect dep symbol names and values in a single loop
 TODO granular text comparison to minimize output writes
   search from the left to find the first character that is different
   search from the right to find the last character that is different
   overwrite only the section between those two locations
 TODO indicate in each window whenever scrolling is possible
-[done] vim-style keybindings to scroll all the way up and all the way down gg/G
