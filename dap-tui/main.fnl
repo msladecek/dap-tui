@@ -153,7 +153,7 @@
 
           _ (tui.handle-command
               :add-event
-              {:label (.. "unhandled key: " char)
+              {:label (.. "unhandled key: " (inspect char))
                :content {:char char
                          :type typ
                          :sequence sequence}})))))
