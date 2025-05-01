@@ -321,19 +321,21 @@
           content-cell-lines (->cell [content-cell]
                                      (stringx.splitlines (or content-cell "")))
           window-content []
-          scroll-rows (->cell 0)
+          scroll {:horizontal (->cell 0)
+                  :vertical (->cell 0)}
           window {: id
                   : title
                   : params
                   : plan
                   : content-plan
                   : border
-                  : scroll-rows}]
+                  : scroll}]
 
       (content-plan.add-callback
         (fn [_ content-plan2]
           (when content-plan2
-            (scroll-rows.set 0)
+            (scroll.vertical.set 0)
+            (scroll.horizontal.set 0)
             (let [content-cell-lines2 (content-cell-lines.get)]
               (for [line-no (+ 1 (length window-content)) content-plan2.size.height]
                 (let [plan (->cell [content-plan]
@@ -342,8 +344,11 @@
                                              :width content-plan.size.width}
                                       :location {:row (- (+ line-no content-plan.location.row) 1)
                                                  :column content-plan.location.column}}))
-                      content (->cell [content-cell-lines scroll-rows]
-                                      (or (. content-cell-lines (+ line-no scroll-rows)) ""))]
+                      scroll-horizontal scroll.horizontal
+                      scroll-vertical scroll.vertical
+                      content (->cell [content-cell-lines scroll-vertical scroll-horizontal]
+                                      (string.sub (or (. content-cell-lines (+ line-no scroll-vertical)) "")
+                                                   (+ 1 scroll-horizontal)))]
                   (->cell [plan content]
                           (when plan
                             (tui.writer.write
@@ -357,17 +362,32 @@
                   (table.insert window-content {: plan : content})))))))
 
       (fn window.scroll-up []
-        (let [scroll (scroll-rows.get)]
-          (when (< 0 scroll)
-            (scroll-rows.set (- scroll 1)))))
+        (let [scroll-vertical (scroll.vertical.get)]
+          (when (< 0 scroll-vertical)
+            (scroll.vertical.set (- scroll-vertical 1)))))
 
       (fn window.scroll-down []
         (when-let [plan (content-plan.get)
                    lines (content-cell-lines.get)
-                   scroll (scroll-rows.get)
+                   scroll-vertical (scroll.vertical.get)
                    overflow (- (length lines) plan.size.height)]
-          (when (< scroll overflow)
-            (scroll-rows.set (+ scroll 1)))))
+          (when (< scroll-vertical overflow)
+            (scroll.vertical.set (+ scroll-vertical 1)))))
+
+      (fn window.scroll-left []
+        (let [scroll-horizontal (scroll.horizontal.get)]
+          (when (< 0 scroll-horizontal)
+            (scroll.horizontal.set (- scroll-horizontal 1)))))
+
+      (fn window.scroll-right []
+        (when-let [plan (content-plan.get)
+                   longest-line (accumulate [max-length 0
+                                             _ line (ipairs (content-cell-lines.get))]
+                                  (math.max max-length (length (stringx.rstrip line))))
+                   scroll-horizontal (scroll.horizontal.get)
+                   overflow (- longest-line plan.size.width)]
+          (when (< scroll-horizontal overflow)
+            (scroll.horizontal.set (+ scroll-horizontal 1)))))
 
       window))
 
@@ -498,34 +518,40 @@
                          (< trace-size (active-frame-no.get))
                          (active-frame-no.set trace-size)))))
 
-      :move-cursor (case tui.active-window
-                     :event-list (when-let [event-no (active-event-no.get)
-                                            events-count (length (events.get))
-                                            window (active-window.get) 
-                                            content-plan (window.content-plan.get)
-                                            window-height content-plan.size.height]
-                                   (case params.direction
-                                     :up (do
-                                           (when (< 1 event-no)
-                                             (active-event-no.set (- event-no 1)))
-                                           (when (= event-no (+ 1 (window.scroll-rows.get)))
-                                             (window.scroll-up)))
-                                     :down (do
-                                             (when (< event-no events-count)
-                                               (active-event-no.set (+ event-no 1)))
-                                             (when (>= event-no window-height)
-                                               (window.scroll-down)))))
-                     :stack-trace (when-let [current-active-frame-no (active-frame-no.get)
-                                             frame-count (length (stack-trace.get))]
-                                    (case params.direction
-                                      :up (when (< 1 current-active-frame-no)
-                                            (active-frame-no.set (- current-active-frame-no 1)))
-                                      :down (when (< current-active-frame-no frame-count)
-                                              (active-frame-no.set (+ current-active-frame-no 1)))))
-                     _ (when-let [window (active-window.get)]
-                         (case params.direction
-                           :up (window.scroll-up)
-                           :down (window.scroll-down)))))
+      :move-cursor (do
+                     (when-let [window (active-window.get)]
+                       (case params.direction
+                         :left (window.scroll-left)
+                         :right (window.scroll-right)))
+
+                     (case tui.active-window
+                       :event-list (when-let [event-no (active-event-no.get)
+                                              events-count (length (events.get))
+                                              window (active-window.get) 
+                                              content-plan (window.content-plan.get)
+                                              window-height content-plan.size.height]
+                                     (case params.direction
+                                       :up (do
+                                             (when (< 1 event-no)
+                                               (active-event-no.set (- event-no 1)))
+                                             (when (= event-no (+ 1 (window.scroll.vertical.get)))
+                                               (window.scroll-up)))
+                                       :down (do
+                                               (when (< event-no events-count)
+                                                 (active-event-no.set (+ event-no 1)))
+                                               (when (>= event-no window-height)
+                                                 (window.scroll-down)))))
+                       :stack-trace (when-let [current-active-frame-no (active-frame-no.get)
+                                               frame-count (length (stack-trace.get))]
+                                      (case params.direction
+                                        :up (when (< 1 current-active-frame-no)
+                                              (active-frame-no.set (- current-active-frame-no 1)))
+                                        :down (when (< current-active-frame-no frame-count)
+                                                (active-frame-no.set (+ current-active-frame-no 1)))))
+                       _ (when-let [window (active-window.get)]
+                           (case params.direction
+                             :up (window.scroll-up)
+                             :down (window.scroll-down))))))
 
     (tui.writer.flush (slow-write?.get)))
 

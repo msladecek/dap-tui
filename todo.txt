@@ -1,7 +1,7 @@
 MAYBE distribute with homebrew?
 TODO unify terminology `active`, `selected`, `focused`
-TODO content scrolling
-  horizontal
+[done] content scrolling
+  [done] horizontal
   [done] vertical
 TODO fix rounding issue in splits
 TODO get rid of the event.content.content crap
@@ -22,7 +22,7 @@ TODO fix writing glitches
   border chars don't get cleared out
   cells count writes into debug screen on first load
   borders don't draw correctly on last row and last column of the window
-  content doesn't get correctly redrawn out on resize
+  content doesn't get correctly redrawn out on resize (cells are located in the wrong place)
 TODO support multiple threads
 TODO command input window
   input breakpoint line number
@@ -37,3 +37,4 @@ TODO granular text comparison to minimize output writes
   search from the right to find the last character that is different
   overwrite only the section between those two locations
 TODO indicate in each window whenever scrolling is possible
+TODO vim-style keybindings to scroll all the way up and all the way down gg/G
