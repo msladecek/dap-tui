@@ -1,6 +1,4 @@
 MAYBE distribute with homebrew?
-[done] unify terminology `active`, `selected`, `focused`
-[done] fix rounding issue in splits
 TODO get rid of the event.content.content crap
 TODO automatic cell unhooking
   1. register all the dependencies of a cell
@@ -13,8 +11,6 @@ TODO commands
   watch expression (expression as input)
 TODO fix writing glitches
   border chars don't get cleared out
-  [cancel] cells count writes into debug screen on first load
-  [cancel] borders don't draw correctly on last row and last column of the window
   content doesn't get correctly redrawn out on resize (cells are located in the wrong place)
 TODO support multiple threads
 TODO command input window
@@ -23,8 +19,4 @@ TODO command input window
 TODO control the order of cell callback execution (for aesthetics - printing top to bottom)
   create a macro (with-cell-context [<component> <id> ...]) and include context in callback set
   order callbacks first by component then by id when executing them
-[done] granular text comparison to minimize output writes
-  search from the left to find the first character that is different
-  search from the right to find the last character that is different
-  overwrite only the section between those two locations
 TODO indicate in each window whenever scrolling is possible
