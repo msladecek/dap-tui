@@ -338,8 +338,7 @@
           active? (->cell [active-window-id]
                            (= id active-window-id))
           border-data (->cell [active? plan]
-                              {:active? focused?
-                               :plan plan})
+                              {: active? : plan})
           border (->cell [border-data]
                          (draw-border border-data.plan title border-data.active?))
           content-plan (->cell [plan]
