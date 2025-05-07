@@ -1,6 +1,6 @@
 MAYBE distribute with homebrew?
 TODO unify terminology `active`, `selected`, `focused`
-TODO fix rounding issue in splits
+[done] fix rounding issue in splits
 TODO get rid of the event.content.content crap
 TODO automatic cell unhooking
   1. register all the dependencies of a cell
@@ -13,8 +13,8 @@ TODO commands
   watch expression (expression as input)
 TODO fix writing glitches
   border chars don't get cleared out
-  cells count writes into debug screen on first load
-  borders don't draw correctly on last row and last column of the window
+  [cancel] cells count writes into debug screen on first load
+  [cancel] borders don't draw correctly on last row and last column of the window
   content doesn't get correctly redrawn out on resize (cells are located in the wrong place)
 TODO support multiple threads
 TODO command input window

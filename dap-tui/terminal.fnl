@@ -115,12 +115,6 @@
 
   writer)
 
-(fn round [value]
-  (let [(integral-part fractional-part) (math.modf value)]
-    (if (< fractional-part 0.5)
-      integral-part
-      (+ 1 integral-part))))
-
 (fn pad-line [content width]
   (.. (string.sub content 1 width)
       (string.rep " " (- width (length content)))))
@@ -169,10 +163,22 @@
 (fn split-real-sizes [split real-size]
   (let [total-relative-sizes (accumulate [sum 0
                                           _ component (ipairs split.content)]
-                               (+ sum (or component.size 1)))]
-    (collect [_ component (ipairs split.content)]
-      (let [relative-size (or component.size 1)]
-        (values component.id (round (* real-size (/ relative-size total-relative-sizes))))))))
+                               (+ sum (or component.size 1)))
+        sizes (collect [_ component (ipairs split.content)]
+                (values component.id
+                        (math.floor (* real-size (/ (or component.size 1) total-relative-sizes)))))
+        total-floored (accumulate [sum 0
+                                   _ size (pairs sizes)]
+                        (+ sum size))
+        remaining-space (math.max 0 (- real-size total-floored))
+        sorted-sizes (icollect [component-id size (tablex.sortv sizes)]
+                       {: component-id : size})
+        padding (fcollect [_ 1 remaining-space] 1)]
+    (accumulate [sizes sizes
+                 _ [{: component-id : size} pad] (pairs (tablex.zip sorted-sizes padding))]
+      (do
+        (set (. sizes component-id) (+ size pad))
+        sizes))))
 
 (fn make-drawing-plan [layout location size]
   (local drawing-plan {})
