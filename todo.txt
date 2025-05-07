@@ -1,5 +1,5 @@
 MAYBE distribute with homebrew?
-TODO unify terminology `active`, `selected`, `focused`
+[done] unify terminology `active`, `selected`, `focused`
 [done] fix rounding issue in splits
 TODO get rid of the event.content.content crap
 TODO automatic cell unhooking

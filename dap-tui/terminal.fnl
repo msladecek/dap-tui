@@ -156,7 +156,7 @@
   (tablex.union t.draw.box_fmt.single
                 {:post " " :pre " "}))
 
-(local my-focused-box-fmt
+(local my-active-box-fmt
   (tablex.union t.draw.box_fmt.double
                 {:post " " :pre " "}))
 
@@ -320,11 +320,11 @@
        :location {:row (+ 1 window-plan.location.row)
                   :column (+ 1 window-plan.location.column)}}))
 
-  (fn draw-border [plan title focused?]
+  (fn draw-border [plan title active?]
     (when plan
       (tui.writer.write
         (.. (t.cursor.position.set_seq plan.location.row plan.location.column)
-            (if focused? (t.text.attr_seq {:fg "yellow"}) (t.text.attr_seq {}))
+            (if active? (t.text.attr_seq {:fg "yellow"}) (t.text.attr_seq {}))
             (t.draw.box_seq plan.size.height plan.size.width my-box-fmt false title)))))
 
   (fn make-window [id title params]
@@ -335,13 +335,13 @@
           title (if window-key
                   (.. (tostring window-key) ": " title)
                   title)
-          focused? (->cell [active-window-id]
+          active? (->cell [active-window-id]
                            (= id active-window-id))
-          border-data (->cell [focused? plan]
-                              {:focused? focused?
+          border-data (->cell [active? plan]
+                              {:active? focused?
                                :plan plan})
           border (->cell [border-data]
-                         (draw-border border-data.plan title border-data.focused?))
+                         (draw-border border-data.plan title border-data.active?))
           content-plan (->cell [plan]
                                (window-plan->content-plan plan))
           content-cell (or params.content-cell (->cell ""))
@@ -455,7 +455,7 @@
                                                "h/j/k/l: move cursor / scroll"
                                                "gg/G: jump to top / jump to bottom"
                                                "E/D: events view / debugger view"
-                                               "1/2/...: Change focused window"]
+                                               "1/2/...: Change active window"]
                                               (stringx.join "\n")))})
      (make-window :info "Info"
                   {:content-cell (->cell [events slow-write?]
@@ -534,14 +534,14 @@
                        (active-screen.set params.screen-id)
                        (active-window-id.set nil))
 
-      :select-window (accumulate [selected-window-id (active-window-id.get)
+      :select-window (accumulate [current-active-window-id (active-window-id.get)
                                   window-id window (pairs windows)]
                        (active-window-id.set
                          (if (and window.plan
                                   (window.plan.get)
                                   (= (?. window :params :key) params.window-key))
                            window-id
-                           selected-window-id)))
+                           current-active-window-id)))
 
       :add-event (let [new-events (tablex.deepcopy (events.get))]
                    (table.insert new-events params)
