@@ -16,7 +16,7 @@ TODO support multiple threads
 TODO command input window
   input breakpoint line number
   only shows up when input is needed
-TODO control the order of cell callback execution (for aesthetics - printing top to bottom)
+[cancel] control the order of cell callback execution (for aesthetics - printing top to bottom)
   create a macro (with-cell-context [<component> <id> ...]) and include context in callback set
   order callbacks first by component then by id when executing them
 TODO indicate in each window whenever scrolling is possible

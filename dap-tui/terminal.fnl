@@ -327,23 +327,21 @@
             (if active? (t.text.attr_seq {:fg "yellow"}) (t.text.attr_seq {}))
             (t.draw.box_seq plan.size.height plan.size.width my-box-fmt false title)))))
 
-  (fn make-window [id title params]
+  (fn make-window [{: id : key : title : content-cell}]
     (let [plan (->cell [drawing-plan]
                        (. drawing-plan id))
-          params (or params {})
-          window-key params.key
-          title (if window-key
-                  (.. (tostring window-key) ": " title)
+          title (if key
+                  (.. (tostring key) ": " title)
                   title)
           active? (->cell [active-window-id]
-                           (= id active-window-id))
+                          (= id active-window-id))
           border-data (->cell [active? plan]
                               {: active? : plan})
           border (->cell [border-data]
                          (draw-border border-data.plan title border-data.active?))
           content-plan (->cell [plan]
                                (window-plan->content-plan plan))
-          content-cell (or params.content-cell (->cell ""))
+          content-cell (or content-cell (->cell ""))
           content-cell-lines (->cell [content-cell]
                                      (stringx.splitlines (or content-cell "")))
           window-content []
@@ -351,7 +349,7 @@
                   :vertical (->cell 0)}
           window {: id
                   : title
-                  : params
+                  : key
                   : plan
                   : content-plan
                   : border
@@ -431,24 +429,27 @@
       window))
 
   (local windows-
-    [(make-window :event-list "Event List"
-                  {:key :1
+    [(make-window {:id :event-list
+                   :title "Event List"
+                   :key :1
                    :content-cell (->cell [events active-event-no]
                                          (->> (icollect [event-no event (ipairs events)]
                                                 (let [active? (= event-no active-event-no)
                                                       prefix (if active? "> " "  ")]
                                                   (.. prefix event.label)) )
                                               (stringx.join "\n")))})
-     (make-window :event-details "Event Details"
-                  {:key :2
+     (make-window {:id :event-details
+                   :title "Event Details"
+                   :key :2
                    :content-cell (->cell [active-event]
                                          (when active-event
                                            (let [content-raw (?. active-event :content :content-raw)]
                                              (if content-raw
                                                (format-with-jq content-raw)
                                                (inspect active-event)))))})
-     (make-window :keybindings "Keybindings"
-                  {:content-cell (->cell (->> ["q: quit"
+     (make-window {:id :keybindings
+                   :title "Keybindings"
+                   :content-cell (->cell (->> ["q: quit"
                                                "r: run"
                                                "c: continue"
                                                "h/j/k/l: move cursor / scroll"
@@ -456,14 +457,16 @@
                                                "E/D: events view / debugger view"
                                                "1/2/...: Change active window"]
                                               (stringx.join "\n")))})
-     (make-window :info "Info"
-                  {:content-cell (->cell [events slow-write?]
+     (make-window {:id :info
+                   :title "Info"
+                   :content-cell (->cell [events slow-write?]
                                          (when events
                                            (->> [(.. "Events: " (tostring (length events)))
                                                  (.. "Slow write enabled: " (tostring slow-write?))]
                                                 (stringx.join "\n"))))})
-     (make-window :variables "Variables"
-                  {:content-cell (->cell [active-frame stack-trace]
+     (make-window {:id :variables
+                   :title "Variables"
+                   :content-cell (->cell [active-frame stack-trace]
                                          (when active-frame
                                            (->> (accumulate [lines []
                                                              _ scope (ipairs active-frame.scopes)]
@@ -476,16 +479,18 @@
                                                                                 " = " variable.value))))
                                                     lines))
                                                 (stringx.join "\n"))))})
-     (make-window :stack-trace "Stack Trace"
-                  {:key :1
+     (make-window {:id :stack-trace
+                   :title "Stack Trace"
+                   :key :1
                    :content-cell (->cell [stack-trace active-frame-no]
                                          (->> (icollect [frame-no frame (ipairs stack-trace)]
                                                 (.. (if (= active-frame-no frame-no) "> " "  ")
                                                     frame.source.path ":" frame.line
                                                     " - " frame.name))
                                               (stringx.join "\n")))})
-     (make-window :source "Source"
-                  {:content-cell (->cell [events active-frame]
+     (make-window {:id :source
+                   :title "Source"
+                   :content-cell (->cell [events active-frame]
                                          (when active-frame
                                            (accumulate [source ""
                                                         _ event (ipairs events)]
@@ -500,8 +505,9 @@
                                                               line)))
                                                       (stringx.join "\n")))
                                                source))))})
-     (make-window :breakpoint-details "Breakpoint Details"
-                  {:content-cell (->cell [events]
+     (make-window {:id :breakpoint-details
+                   :title "Breakpoint Details"
+                   :content-cell (->cell [events]
                                          (events->breakpoint-details events))})])
 
   (local windows (collect [_ window (ipairs windows-)]
@@ -538,7 +544,7 @@
                        (active-window-id.set
                          (if (and window.plan
                                   (window.plan.get)
-                                  (= (?. window :params :key) params.window-key))
+                                  (= window.key params.window-key))
                            window-id
                            current-active-window-id)))
 
