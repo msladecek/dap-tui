@@ -140,6 +140,7 @@
           (case command
             :1 (tui.handle-command :select-window {:window-key :1})
             :2 (tui.handle-command :select-window {:window-key :2})
+            :? (tui.handle-command :toggle-floating-window {:window-id :keybindings-popup})
 
             :E (tui.handle-command :select-screen {:screen-id :events})
             :D (tui.handle-command :select-screen {:screen-id :debug})

@@ -180,6 +180,51 @@
         (set (. sizes component-id) (+ size pad))
         sizes))))
 
+(fn intervals-partially-overlap? [[a-start a-end] [b-start b-end]]
+  (or (<= a-start b-start a-end b-end)
+      (<= b-start a-start b-end a-end)))
+
+(fn intervals-fully-overlap? [[a-start a-end] [b-start b-end]]
+  (or (<= a-start b-start b-end a-end)
+      (<= b-start a-start a-end b-end)))
+
+(fn intervals-overlap? [a b]
+  (or (intervals-partially-overlap? a b)
+      (intervals-fully-overlap? a b)))
+
+(fn interval-difference [[a-start a-end] [b-start b-end]]
+  (if
+    (<= a-start b-start a-end b-end)
+    [[a-start b-start]]
+
+    (<= b-start a-start b-end a-end)
+    [[b-end a-end]]
+
+    (<= a-start b-start b-end a-end)
+    [[a-start b-start]
+     [b-end a-end]]
+
+    (<= b-start a-start a-end b-end)
+    []
+
+    [[a-start a-end]]))
+
+(fn interval-intersection [[a-start a-end] [b-start b-end]]
+  (if
+    (<= a-start b-start a-end b-end)
+    [b-start a-end]
+
+    (<= b-start a-start b-end a-end)
+    [a-start b-end]
+
+    (<= a-start b-start b-end a-end)
+    [b-start b-end]
+
+    (<= b-start a-start a-end b-end)
+    [a-start a-end]
+
+    [0 0]))
+
 (fn make-drawing-plan [layout location size]
   (local drawing-plan {})
 
@@ -240,6 +285,7 @@
   (local active-screen (->cell nil))
   (local active-window-id (->cell nil))
   (->cell [active-window-id] (set (. tui :active-window) active-window-id))
+  (local active-floating-window-id (->cell nil))
   (local active-event-no (->cell nil))
   (local active-event (->cell [events active-event-no]
                               (when (and events active-event-no)
@@ -313,6 +359,9 @@
                   location {:row 1 :column 1}]
               (make-drawing-plan layout location screen-size))))
 
+  (local float-plan
+    (->cell nil))
+
   (fn window-plan->content-plan [window-plan]
     (when window-plan
       {:size {:height (- window-plan.size.height 2)
@@ -327,6 +376,90 @@
             (if active? (t.text.attr_seq {:fg "yellow"}) (t.text.attr_seq {}))
             (t.draw.box_seq plan.size.height plan.size.width my-box-fmt false title)))))
 
+  (fn make-floating-window [{: id : title : content-cell}]
+    (let [content-cell (or content-cell (->cell ""))
+          content-cell-lines (->cell [content-cell]
+                                     (stringx.splitlines (or content-cell "")))
+          plan (->cell [active-floating-window-id screen-size content-cell-lines]
+                       (when (and active-floating-window-id (= active-floating-window-id id))
+                         (let [size {:height (length content-cell-lines)
+                                     :width (accumulate [longest 0
+                                                         _ line (pairs content-cell-lines)]
+                                              (math.max longest (length line)))}]
+                           {:size size
+                            :location {:row 5 ;(math.floor (/ (- screen-size.height size.height) 2))
+                                       :column 40 ;(math.floor (/ (- screen-size.width size.width) 2))
+                                       }})))
+          border (->cell [plan]
+                         (draw-border plan title))
+          content-plan (->cell [plan]
+                               (window-plan->content-plan plan))
+          window-content []
+          scroll {:horizontal (->cell 0)
+                  :vertical (->cell 0)}
+          window {: id
+                  : title
+                  : plan
+                  : content-plan
+                  : border
+                  : scroll}]
+
+      (plan.add-callback
+        (fn [_ plan] (float-plan.set plan)))
+
+      (content-plan.add-callback
+        (fn [_ content-plan2]
+          (when content-plan2
+            (scroll.vertical.set 0)
+            (scroll.horizontal.set 0)
+            (let [content-cell-lines2 (content-cell-lines.get)]
+              (for [line-no (+ 1 (length window-content)) content-plan2.size.height]
+                (let [plan (->cell [content-plan]
+                                   (when (and content-plan (<= line-no content-plan.size.height))
+                                     {:size {:height 1
+                                             :width content-plan.size.width}
+                                      :location {:row (- (+ line-no content-plan.location.row) 1)
+                                                 :column content-plan.location.column}}))
+                      scroll-horizontal scroll.horizontal
+                      scroll-vertical scroll.vertical
+                      content (->cell [content-cell-lines scroll-vertical scroll-horizontal]
+                                      (string.sub (or (. content-cell-lines (+ line-no scroll-vertical)) "")
+                                                  (+ 1 scroll-horizontal)))]
+                  (->cell [plan content]
+                          (when plan
+                            (tui.writer.write
+                              (if (= :content *initiator*)
+                                (let [(start end) (different-section content *initiator-old-value*)
+                                      max-width (math.max (length content) (length *initiator-old-value*))]
+                                  (.. (t.text.attr_seq {})
+                                      (t.cursor.position.set_seq plan.location.row (- (+ plan.location.column start) 1))
+                                      (-> (pad-line content max-width)
+                                          (string.sub start (math.min end plan.size.width)))))
+                                (.. (t.text.attr_seq {})
+                                    (t.cursor.position.set_seq plan.location.row plan.location.column)
+                                    (pad-line content plan.size.width))))))
+                  (table.insert window-content {: plan : content})))))))
+
+      window))
+
+  (local floating-windows-
+    [(make-floating-window {:id :keybindings-popup
+                            :title "Keybindings"
+                            :content-cell (->cell (->> ["q: quit"
+                                                        "r: run"
+                                                        "c: continue"
+                                                        "h/j/k/l: move cursor / scroll"
+                                                        "gg/G: jump to top / jump to bottom"
+                                                        "E/D: events view / debugger view"
+                                                        "1/2/...: Change active window"]
+                                                       (stringx.join "\n")))})])
+
+  (local floating-windows (collect [_ window (ipairs floating-windows-)]
+                            (values window.id window)))
+
+  (local active-floating-window (->cell [active-floating-window-id]
+                                        (. floating-windows active-floating-window-id)))
+
   (fn make-window [{: id : key : title : content-cell}]
     (let [plan (->cell [drawing-plan]
                        (. drawing-plan id))
@@ -335,9 +468,22 @@
                   title)
           active? (->cell [active-window-id]
                           (= id active-window-id))
-          border-data (->cell [active? plan]
-                              {: active? : plan})
+          border-data (->cell [active? plan float-plan]
+                              {: plan
+                               : active?
+                               :intercepts-float-plan?
+                               (if (and plan float-plan)
+                                 (let [a-row [plan.location.row (+ plan.location.row plan.size.height)]
+                                       a-column [plan.location.column (+ plan.location.column plan.size.width)]
+                                       b-row [float-plan.location.row (+ float-plan.location.row float-plan.size.height)]
+                                       b-column [float-plan.location.column (+ float-plan.location.column float-plan.size.width)]]
+                                   (and (intervals-overlap? a-row b-row)
+                                        (intervals-overlap? a-column b-column)
+                                        (not (and (intervals-fully-overlap? a-row b-row)
+                                                  (intervals-fully-overlap? a-column b-column)))))
+                                 false)})
           border (->cell [border-data]
+                         ; TODO: don't draw over floating window
                          (draw-border border-data.plan title border-data.active?))
           content-plan (->cell [plan]
                                (window-plan->content-plan plan))
@@ -372,20 +518,50 @@
                       scroll-vertical scroll.vertical
                       content (->cell [content-cell-lines scroll-vertical scroll-horizontal]
                                       (string.sub (or (. content-cell-lines (+ line-no scroll-vertical)) "")
-                                                   (+ 1 scroll-horizontal)))]
-                  (->cell [plan content]
+                                                  (+ 1 scroll-horizontal)))]
+                  (->cell [plan content float-plan]
                           (when plan
                             (tui.writer.write
-                              (if (= :content *initiator*)
-                                (let [(start end) (different-section content *initiator-old-value*)
-                                      max-width (math.max (length content) (length *initiator-old-value*))]
-                                  (.. (t.text.attr_seq {})
-                                      (t.cursor.position.set_seq plan.location.row (- (+ plan.location.column start) 1))
-                                      (-> (pad-line content max-width)
-                                          (string.sub start (math.min end plan.size.width)))))
+                              (if
+                                ;; content has changed, draw only the pieces that are different
+                                (= :content *initiator*)
+                                (let [(diff-start diff-end) (different-section content *initiator-old-value*)
+                                      window-interval [(- (+ plan.location.column diff-start) 1) (- (+ plan.location.column diff-end) 1)]
+                                      float-interval (if float-plan
+                                                       [float-plan.location.column (+ float-plan.location.column float-plan.size.width)]
+                                                       [0 0])]
+                                  (accumulate [slices (t.text.attr_seq {})
+                                               _ [slice-start slice-end] (ipairs (interval-difference window-interval float-interval))]
+                                    (.. slices
+                                        (t.cursor.position.set_seq plan.location.row slice-start)
+                                        (-> content
+                                            (pad-line (math.max (length content) (length *initiator-old-value*)))
+                                            (string.sub diff-start (math.min diff-end plan.size.width))))))
+
+                                ;; floating window will draw itself
+                                (and (= :float-plan *initiator*)
+                                     float-plan)
+                                ""
+
+                                ;; floating window went away, draw the content underneath it
+                                (= :float-plan *initiator*)
+                                (let [old-float-plan *initiator-old-value*]
+                                  (when (<= old-float-plan.location.row plan.location.row (- (+ old-float-plan.location.row old-float-plan.size.height) 1))
+                                    (let [window-interval [plan.location.column (+ plan.location.column plan.size.width)]
+                                          float-interval [old-float-plan.location.column (+ old-float-plan.location.column old-float-plan.size.width) ]
+                                          [intersection-start intersection-end] (interval-intersection window-interval float-interval)]
+                                      (when (not= intersection-start intersection-end)
+                                        (.. (t.cursor.position.set_seq plan.location.row intersection-start)
+                                            (-> content
+                                                (pad-line plan.size.width)
+                                                (string.sub (- intersection-start plan.location.column) (- intersection-end plan.location.column))))))))
+
+                                ;; redraw the whole content
+                                ; TODO: take floating widnow into account
                                 (.. (t.text.attr_seq {})
                                     (t.cursor.position.set_seq plan.location.row plan.location.column)
                                     (pad-line content plan.size.width))))))
+
                   (table.insert window-content {: plan : content})))))))
 
       (fn window.scroll-up []
@@ -459,9 +635,11 @@
                                               (stringx.join "\n")))})
      (make-window {:id :info
                    :title "Info"
-                   :content-cell (->cell [events slow-write?]
+                   :content-cell (->cell [events slow-write? active-floating-window-id]
                                          (when events
                                            (->> [(.. "Events: " (tostring (length events)))
+                                                 (.. "Floating window: " (tostring active-floating-window-id))
+                                                 (.. "float " (tablex.size active-floating-window.callbacks))
                                                  (.. "Slow write enabled: " (tostring slow-write?))]
                                                 (stringx.join "\n"))))})
      (make-window {:id :variables
@@ -547,6 +725,11 @@
                                   (= window.key params.window-key))
                            window-id
                            current-active-window-id)))
+
+      :toggle-floating-window (let [current-active-floating-window-id (active-floating-window-id.get)]
+                                (if (= current-active-floating-window-id params.window-id)
+                                  (active-floating-window-id.set nil)
+                                  (active-floating-window-id.set params.window-id)))
 
       :add-event (let [new-events (tablex.deepcopy (events.get))]
                    (table.insert new-events params)
